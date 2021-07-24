@@ -16,8 +16,9 @@ pub struct Registers {
     /// Register v[f] also doubles as the carry flag, collision flag, or borrow flag dependent on
     /// the operation.
   pub v: [Wrapping<u8>; 16],
-
-  /// The address register (PC) is named i
+  /// The program counter
+  pub pc: Wrapping<u16>,
+  /// The address register
   pub i: Wrapping<u16>,
   /// The stack is only used for return
   pub stack: [Wrapping<u8>; 256],
@@ -28,6 +29,12 @@ pub struct Registers {
   /// The sound timer emits a sound if it is not zero.
   /// This timer counts down to zero at 60hz and then stops.
   pub sound: Wrapping<u8>,
+}
+
+impl Registers {
+    pub fn inc_pc(&mut self, val: u16) {
+        self.pc += Wrapping(val);
+    }
 }
 
 pub struct Instruction {
@@ -107,11 +114,12 @@ impl Instruction {
     /// skip the next instruction, otherwise we run the next instruction.
     fn reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register, data) = Self::register_and_immediate_from_data(data);
+        registers.inc_pc(
         if registers.v[register as usize] == Wrapping(data) {
-            registers.i += Wrapping(2);
+           2
         } else {
-            registers.i += Wrapping(1);
-        }
+           1
+        });
     }
 
     fn reg_equal_to_string(data: u16) -> String {
@@ -123,11 +131,12 @@ impl Instruction {
     /// next instruction, otherwise run the next instruction.
     fn reg_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register, data) = Self::register_and_immediate_from_data(data);
+        registers.inc_pc(
         if registers.v[register as usize] != Wrapping(data) {
-            registers.i += Wrapping(2);
+           2
         } else {
-            registers.i += Wrapping(1);
-        }
+           1
+        });
     }
 
     fn reg_not_equal_to_string(data: u16) -> String {
@@ -139,11 +148,7 @@ impl Instruction {
     /// run it.
     fn two_reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register1, register2) = Self::two_registers_from_data(data);
-        if registers.v[register1] == registers.v[register2] {
-            registers.i += Wrapping(2);
-        } else {
-            registers.i += Wrapping(1);
-        }
+        registers.inc_pc(if registers.v[register1] != registers.v[register2] { 2 } else { 1 });
     }
 
     fn two_reg_equal_to_string(data: u16) -> String {
@@ -152,25 +157,70 @@ impl Instruction {
     }
 
     /// Load an immediate into a register
-    pub fn load_immediate(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn load_immediate(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.v[register] = Wrapping(data);
     }
 
-    pub fn load_immediate_to_string(data: u16) -> String {
+    fn load_immediate_to_string(data: u16) -> String {
         let (register, data) = Self::register_and_immediate_from_data(data);
         format!("ld v{} {}", register, data)
     }
 
     /// Same as load immediate but add it to the register rather than add
-    pub fn add_immediate(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn add_immediate(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.v[register] = registers.v[register] + Wrapping(data);
+        registers.inc_pc(1);
     }
 
-    pub fn add_immediate_to_string(data: u16) -> String {
+    fn add_immediate_to_string(data: u16) -> String {
         let (register, data) = Self::register_and_immediate_from_data(data);
         format!("add v{} {}", register, data)
+    }
+
+    fn math_or_bitop(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        unimplemented!("math or binop row")
+    }
+
+    fn math_or_bitop_string(registers: &mut Registers, memory: &mut Memory, data: u16) -> String {
+        unimplemented!("math or binop tostring")
+    }
+
+    fn two_registers_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        registers.inc_pc(if registers.v[register1] != registers.v[register2] { 2 } else { 1 });
+    }
+
+    fn two_registers_not_equal_tostring(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("neq v{} v{}", register1, register2)
+    }
+
+    fn set_i(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        registers.i = Wrapping(data);
+        registers.inc_pc(1);
+    }
+
+    fn set_i_tostring(data: u16) -> String {
+        format!("ld i {:x}", data)
+    }
+
+    fn jump_immediate_plus_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        registers.pc = Wrapping(registers.v[0].0 as u16) + Wrapping(data);
+    }
+
+    fn jump_immediate_plus_register_to_string(data: u16) -> String {
+        format!("jump v0 + {}", data)
+    }
+
+    /// The masked random instruction generates a random value between 0 and 255, masks it with an
+    /// immediate (& imm) and then places it in a specified register.
+    fn masked_random(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        println!("TODO: Rand");
+        let (register, mask) = Self::register_and_immediate_from_data(data);
+        registers.v[register] = Wrapping(45 & mask);
+        registers.inc_pc(1);
     }
 
     pub fn op_table() -> [Self; 32] {
@@ -192,6 +242,7 @@ impl Cpu {
     pub fn new() -> Self {
         Self {
             registers: Registers {
+                pc: Wrapping(0),
                 v: [Wrapping(0); 16],
                 i: Wrapping(0),
                 stack: [Wrapping(0); 256],
