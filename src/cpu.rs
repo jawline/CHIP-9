@@ -19,6 +19,7 @@ pub struct Registers {
 
   /// The address register (PC) is named i
   pub i: Wrapping<u16>,
+  /// The stack is only used for return
   pub stack: [Wrapping<u8>; 256],
 
   /// The delay timer counts down to zero at 60hz
@@ -43,7 +44,7 @@ impl Instruction {
     /// The zero opcode can be either clear display, ret, or machine call (Call an instruction
     /// written in machine code) depending on parameters. We merge these all into one opcode
     /// execution.
-    pub fn mcall_display_or_flow(_registers: &mut Registers, _memory: &mut Memory, data: u16) {
+    fn mcall_display_or_flow(_registers: &mut Registers, _memory: &mut Memory, data: u16) {
         match data {
             0xE0 => unimplemented!("clear display"),
             0xEE => unimplemented!("ret"),
@@ -51,7 +52,7 @@ impl Instruction {
         }
     }
 
-    pub fn mcall_display_or_flow_to_string(data: u16) -> String {
+    fn mcall_display_or_flow_to_string(data: u16) -> String {
        match data {
            0xE0 => format!("clear_display"),
            0xEE => format!("return"),
@@ -60,20 +61,20 @@ impl Instruction {
     }
 
     /// Goto changes the I pointer to the fixed location
-    pub fn goto(_registers: &mut Registers, _memory: &mut Memory, _data: u16) {
+    fn goto(_registers: &mut Registers, _memory: &mut Memory, _data: u16) {
         unimplemented!("goto")
     }
 
-    pub fn goto_to_string(data: u16) -> String {
+    fn goto_to_string(data: u16) -> String {
         format!("goto {:x}", data)
     }
 
     /// Call pushes a return address and then changes I to the given location
-    pub fn call(_registers: &mut Registers, _memory: &mut Memory, _data: u16) {
+    fn call(_registers: &mut Registers, _memory: &mut Memory, _data: u16) {
         unimplemented!("call");
     }
 
-    pub fn call_to_string(data: u16) -> String {
+    fn call_to_string(data: u16) -> String {
         format!("call {:x}", data)
     }
 
@@ -88,12 +89,12 @@ impl Instruction {
     }
 
     /// Extract the immediate from the opcode when the instruction has the form __II
-    pub fn immediate_from_data(data: u16) -> u8 {
+    fn immediate_from_data(data: u16) -> u8 {
         (data & DATA_MASK) as u8
     }
 
     /// Extract both the register and immediate for instructions in the form _RII
-    pub fn register_and_immediate_from_data(data: u16) -> (usize, u8) {
+    fn register_and_immediate_from_data(data: u16) -> (usize, u8) {
         (Self::register_from_data(data) as usize, Self::immediate_from_data(data))
     }
 
@@ -104,7 +105,7 @@ impl Instruction {
 
     /// Checks if a register and an immediate value are equal. If they are equal then we
     /// skip the next instruction, otherwise we run the next instruction.
-    pub fn reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         if registers.v[register as usize] == Wrapping(data) {
             registers.i += Wrapping(2);
@@ -113,14 +114,14 @@ impl Instruction {
         }
     }
 
-    pub fn reg_equal_to_string(data: u16) -> String {
+    fn reg_equal_to_string(data: u16) -> String {
         let (register, data) = Self::register_and_immediate_from_data(data);
         format!("eq v{} {}", register, data)
     }
 
     /// Checks if a register and an immediate are not equal. If they are not equal then skip the
     /// next instruction, otherwise run the next instruction.
-    pub fn reg_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn reg_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         if registers.v[register as usize] != Wrapping(data) {
             registers.i += Wrapping(2);
@@ -129,9 +130,47 @@ impl Instruction {
         }
     }
 
-    pub fn reg_not_equal_to_string(data: u16) -> String {
+    fn reg_not_equal_to_string(data: u16) -> String {
         let (register, data) = Self::register_and_immediate_from_data(data);
         format!("neq v{} {}", register, data)
+    }
+
+    /// Checks if two registers are equal. If they are then skip the next instruction, otherwise
+    /// run it.
+    fn two_reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        if registers.v[register1] == registers.v[register2] {
+            registers.i += Wrapping(2);
+        } else {
+            registers.i += Wrapping(1);
+        }
+    }
+
+    fn two_reg_equal_to_string(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("eq v{} v{}", register1, register2)
+    }
+
+    /// Load an immediate into a register
+    pub fn load_immediate(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register, data) = Self::register_and_immediate_from_data(data);
+        registers.v[register] = Wrapping(data);
+    }
+
+    pub fn load_immediate_to_string(data: u16) -> String {
+        let (register, data) = Self::register_and_immediate_from_data(data);
+        format!("ld v{} {}", register, data)
+    }
+
+    /// Same as load immediate but add it to the register rather than add
+    pub fn add_immediate(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register, data) = Self::register_and_immediate_from_data(data);
+        registers.v[register] = registers.v[register] + Wrapping(data);
+    }
+
+    pub fn add_immediate_to_string(data: u16) -> String {
+        let (register, data) = Self::register_and_immediate_from_data(data);
+        format!("add v{} {}", register, data)
     }
 
     pub fn op_table() -> [Self; 32] {
