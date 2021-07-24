@@ -1,7 +1,13 @@
 use std::num::Wrapping;
 use crate::memory::Memory;
 
+/// If opcode has the form _XN_ or _XR_ then the first register can be extracted with this mask
 pub const REGISTER_MASK: u16 = 0x0F00;
+
+/// If the opcode has the form _XR_ the second register can be extracted with this mask
+pub const REGISTER_TWO_MASK: u16 = 0x00F0;
+
+/// If opcodes have the form __II then the immediate value can be extracted with this mask
 pub const DATA_MASK: u16 = 0x00FF;
 
 pub struct Registers {
@@ -24,8 +30,11 @@ pub struct Registers {
 }
 
 pub struct Instruction {
+    /// Rough description of the opcode from the first byte
     pub desc: String,
+    /// Execute the opcode, with the change in state being reflected in registers and memory
     pub execute: fn(registers: &mut Registers, memory: &mut Memory, data: u16),
+    /// Granular description of the opcode that requires the opcode data (not just the first byte)
     pub to_string: fn(data: u16) -> String,
 }
 
@@ -49,7 +58,7 @@ impl Instruction {
            _ => format!("mcall {:x}", data),
        }
     }
-   
+
     /// Goto changes the I pointer to the fixed location
     pub fn goto(_registers: &mut Registers, _memory: &mut Memory, _data: u16) {
         unimplemented!("goto")
@@ -68,19 +77,29 @@ impl Instruction {
         format!("call {:x}", data)
     }
 
-    /// Extract the register from the opcode when the instruction has the form OXNN
+    /// Extract the register from the opcode when the instruction has the form _R__
     fn register_from_data(data: u16) -> u8 {
          ((data & REGISTER_MASK) >> 8) as u8
     }
 
-    /// Extract the immediate from the opcode when the instruction has the form OXNN
+    /// Extract the register from the opcode when the register has the form __R_
+    fn register_two_from_data(data: u16) -> u8 {
+        ((data & REGISTER_TWO_MASK) >> 4) as u8
+    }
+
+    /// Extract the immediate from the opcode when the instruction has the form __II
     pub fn immediate_from_data(data: u16) -> u8 {
         (data & DATA_MASK) as u8
     }
 
-    /// Extract both the register and immediate for instructions in the form OXNN
-    pub fn register_and_immediate_from_data(data: u16) -> (u8, u8) {
-        (Self::register_from_data(data), Self::immediate_from_data(data))
+    /// Extract both the register and immediate for instructions in the form _RII
+    pub fn register_and_immediate_from_data(data: u16) -> (usize, u8) {
+        (Self::register_from_data(data) as usize, Self::immediate_from_data(data))
+    }
+
+    /// Extract two registers from and opcode in the form _RV_
+    fn two_registers_from_data(data: u16) -> (usize, usize) {
+        (Self::register_from_data(data) as usize, Self::register_two_from_data(data) as usize)
     }
 
     /// Checks if a register and an immediate value are equal. If they are equal then we
