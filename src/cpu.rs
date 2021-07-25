@@ -1,3 +1,4 @@
+use log::{info, trace};
 use std::num::Wrapping;
 use crate::memory::Memory;
 
@@ -14,6 +15,7 @@ pub const DATA_MASK: u16 = 0x00FF;
 /// we extract it with this mask
 pub const NIBBLE_DATA_MASK: u16 = 0x000F;
 
+#[derive(Debug)]
 pub struct Registers {
 
     /// The CHIP architecture has 16 8-bit general purpose registers.
@@ -71,9 +73,9 @@ impl Instruction {
        }
     }
 
-    /// Goto changes the I pointer to the fixed location
-    fn goto(_registers: &mut Registers, _memory: &mut Memory, _data: u16) {
-        unimplemented!("goto")
+    /// Goto changes the PC pointer to the fixed location
+    fn goto(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        registers.pc = Wrapping(data);
     }
 
     fn goto_to_string(data: u16) -> String {
@@ -187,7 +189,7 @@ impl Instruction {
         unimplemented!("math or binop row")
     }
 
-    fn math_or_bitop_string(registers: &mut Registers, memory: &mut Memory, data: u16) -> String {
+    fn math_or_bitop_to_string(data: u16) -> String {
         unimplemented!("math or binop tostring")
     }
 
@@ -196,7 +198,7 @@ impl Instruction {
         registers.inc_pc(if registers.v[register1] != registers.v[register2] { 2 } else { 1 });
     }
 
-    fn two_registers_not_equal_tostring(data: u16) -> String {
+    fn two_registers_not_equal_to_string(data: u16) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("neq v{} v{}", register1, register2)
     }
@@ -206,7 +208,7 @@ impl Instruction {
         registers.inc_pc(1);
     }
 
-    fn set_i_tostring(data: u16) -> String {
+    fn set_i_to_string(data: u16) -> String {
         format!("ld i {:x}", data)
     }
 
@@ -258,7 +260,7 @@ impl Instruction {
         unimplemented!();
     }
 
-    pub fn main_op_table() -> [Self; 16] {
+    pub fn main_op_table() -> [Self; 15] {
 
         let call_instruction = Self {
             desc: format!("call XXX"),
@@ -308,13 +310,61 @@ impl Instruction {
             to_string: Self::add_immediate_to_string,
         };
 
-        unimplemented!()
+        let math_or_bitop = Self {
+            desc: format!("math or bitop"),
+            execute: Self::math_or_bitop,
+            to_string: Self::math_or_bitop_to_string,
+        };
+
+        let two_reg_not_equal = Self {
+            desc: format!("neq Vx Vy"),
+            execute: Self::two_registers_not_equal,
+            to_string: Self::two_registers_not_equal_to_string,
+        };
+
+        let set_i = Self {
+            desc: format!("ld I, NNN"),
+            execute: Self::set_i,
+            to_string: Self::set_i_to_string,
+        };
+
+        let jump_imm_plus_register = Self {
+            desc: format!("jmp III + Vx"),
+            execute: Self::jump_immediate_plus_register,
+            to_string: Self::jump_immediate_plus_register_to_string,
+        };
+
+        let masked_random = Self {
+            desc: format!("rand Vx & II"),
+            execute: Self::masked_random,
+            to_string: Self::masked_random_to_string,
+        };
+
+        let draw_sprite = Self {
+            desc: format!("draw_sprite"),
+            execute: Self::draw_sprite,
+            to_string: Self::draw_sprite_to_string,
+        };
+
+        let key_op = Self {
+            desc: format!("key"),
+            execute: Self::key_op,
+            to_string: Self::key_op_to_string,
+        };
+
+        let load_or_store = Self {
+            desc: format!("load or store"),
+            execute: Self::load_or_store,
+            to_string: Self::load_or_store_to_string,
+        };
+
+        [call_instruction, goto_instruction, reg_eq, reg_neq, two_reg_eq, load_immediate, add_immediate, math_or_bitop, two_reg_not_equal, set_i, jump_imm_plus_register, masked_random, draw_sprite, key_op, load_or_store]
     }
 }
 
 pub struct Cpu {
     pub registers: Registers,
-    pub main_op_table: [Instruction; 16],
+    pub main_op_table: [Instruction; 15],
 }
 
 impl Cpu {
@@ -332,17 +382,27 @@ impl Cpu {
         }
     }
 
-    pub fn step(memory: &mut Memory) {
+    pub fn step(&mut self, memory: &mut Memory) {
+        let next_opcode = memory.get16(self.registers.pc.0 as usize).0;
+        let op_id = ((next_opcode & 0xF000) >> 12) as usize;
+        trace!("ID: {:x} DATA: {:x}", op_id, next_opcode & 0x0FFF);
+        (self.main_op_table[op_id].execute)(&mut self.registers, memory, next_opcode & 0x0FFF); 
     }
 }
 
 #[cfg(test)]
 mod instruction_tests {
+    use log::info;
     use crate::cpu::Cpu;
     use crate::cpu::Memory;
     use std::num::Wrapping;
 
-    fn prepare_cpu(memory: &[u8]) -> Cpu {
+	#[ctor::ctor]
+	fn init() {
+		let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    fn prepare_cpu() -> Cpu {
         let cpu = Cpu::new();
         cpu
     }
@@ -354,10 +414,12 @@ mod instruction_tests {
 
     #[test]
     fn goto() {
-        let mut program = [0; 256];
-        assemble_goto(&mut program, 0xAF);
-        let mut memory = Memory::of_bytes(&program);
-        let mut cpu = prepare_cpu(&program);
-        assert!(cpu.registers.pc == Wrapping(0x00AF));
+		let mut program = [0; 256];
+		assemble_goto(&mut program, 0xAF);
+		let mut memory = Memory::of_bytes(&program);
+		let mut cpu = prepare_cpu();
+        cpu.step(&mut memory);
+		info!("{:?}", cpu.registers);
+		assert!(cpu.registers.pc == Wrapping(0x00AF));
     }
 }
