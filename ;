@@ -289,25 +289,6 @@ impl Instruction {
             execute: Self::reg_not_equal,
             to_string: Self::reg_not_equal_to_string,
         };
-
-        let two_reg_eq = Self {
-            desc: format!("eq Vx Vy"),
-            execute: Self::two_reg_equal,
-            to_string: Self::two_reg_equal_to_string,
-        };
-
-        let load_immediate = Self {
-            desc: format!("ld Vx II"),
-            execute: Self::load_immediate,
-            to_string: Self::load_immediate_to_string,
-        };
-
-        let add_immediate = Self {
-            desc: format!("add Vx II"),
-            execute: Self::add_immediate,
-            to_string: Self::add_immediate_to_string,
-        };
-
         unimplemented!()
     }
 }

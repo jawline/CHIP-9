@@ -1,4 +1,5 @@
 use std::num::Wrapping;
+use std::cmp::min;
 
 pub const MEMORY_SIZE: usize = 1024 * 8;
 
@@ -12,6 +13,14 @@ impl Memory {
         Self {
             data: [Wrapping(0); MEMORY_SIZE]
         }
+    }
+
+    pub fn of_bytes(data: & [u8]) -> Self {
+        let mut new_memory = Self::new();
+        for i in 0..min(data.len(), MEMORY_SIZE) {
+            new_memory.data[i] = Wrapping(data[i]);
+        }
+        new_memory
     }
 
     pub fn get(&self, idx: usize) -> Wrapping<u8> {
