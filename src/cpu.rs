@@ -156,6 +156,7 @@ impl Instruction {
     /// skip the next instruction, otherwise we run the next instruction.
     fn reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register, data) = Self::register_and_immediate_from_data(data);
+        trace!("eq v{:x} {:x}", register, data);
         registers.inc_pc(
         if registers.v[register as usize] == Wrapping(data) {
            4
@@ -459,6 +460,11 @@ mod instruction_tests {
         data[1] = 0xEE;
     }
 
+    fn assemble_reg_eq_imm(data: &mut [u8], reg: u8, imm: u8) {
+        data[0] = (3 << 4) | (reg & 0x0F);
+        data[1] = imm;
+    }
+
     #[test]
     fn goto() {
 		let mut program = [0; 256];
@@ -488,6 +494,27 @@ mod instruction_tests {
     }
 
     #[test]
+    fn reg_eq_imm() {
+        let mut program = [0; 256];
+        assemble_reg_eq_imm(&mut program, 5, 0xFE);
+
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+
+        cpu.registers.v[5] = Wrapping(0xFE);
+
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.pc.0, 0x04);
+
+        cpu.registers.pc = Wrapping(0);
+        cpu.registers.v[5] = Wrapping(0xAE);
+
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.pc.0, 0x02);
+
+    }
+
+    #[test]
     fn ret() {
         let mut program = [0; 256];
         assemble_call(&mut program, 0x10);
@@ -504,6 +531,7 @@ mod instruction_tests {
         assert_eq!(cpu.registers.stack[1], Wrapping(0x02));
         assert_eq!(cpu.registers.pc, Wrapping(0x10));
         cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
         assert_eq!(cpu.registers.stack_idx, 0);
         assert_eq!(cpu.registers.pc, Wrapping(0x02));
     }
