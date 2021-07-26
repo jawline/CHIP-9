@@ -2,6 +2,9 @@ use log::{info, trace};
 use std::num::Wrapping;
 use crate::memory::Memory;
 
+/// Size of an instruction (CHIP-8 uses fixed width opcodes)
+pub const INSTRUCTION_SIZE: u16 = 0x2;
+
 /// If opcode has the form _XN_ or _XR_ then the first register can be extracted with this mask
 pub const REGISTER_MASK: u16 = 0x0F00;
 
@@ -26,8 +29,10 @@ pub struct Registers {
   pub pc: Wrapping<u16>,
   /// The address register
   pub i: Wrapping<u16>,
+
   /// The stack is only used for return
   pub stack: [Wrapping<u8>; 256],
+  pub stack_idx: usize,
 
   /// The delay timer counts down to zero at 60hz
   pub delay: Wrapping<u8>,
@@ -38,8 +43,29 @@ pub struct Registers {
 }
 
 impl Registers {
+
+    /// Increment the PC by a given amount
     pub fn inc_pc(&mut self, val: u16) {
         self.pc += Wrapping(val);
+    }
+
+    /// Push a u16 to the stack in big-endian format
+    pub fn stack_push16(&mut self, value: u16) {
+        let lower_part = Wrapping((value & 0x00FF) as u8);
+        let upper_part = Wrapping(((value & 0xFF00) >> 8) as u8);
+        self.stack[self.stack_idx] = upper_part;
+        self.stack[self.stack_idx + 1] = lower_part;
+        self.stack_idx += 2;
+    }
+
+    /// Pop a u16 from the stack
+    /// TODO: Since stack is only ever used for retcodes I could just keep them as usize or u16's
+    pub fn stack_pop16(&mut self) -> u16 {
+        self.stack_idx -= 2;
+        let upper_part = self.stack[self.stack_idx];
+        let lower_part = self.stack[self.stack_idx + 1];
+
+        ((upper_part.0 as u16) << 8) | (lower_part.0 as u16)
     }
 }
 
@@ -57,10 +83,14 @@ impl Instruction {
     /// The zero opcode can be either clear display, ret, or machine call (Call an instruction
     /// written in machine code) depending on parameters. We merge these all into one opcode
     /// execution.
-    fn mcall_display_or_flow(_registers: &mut Registers, _memory: &mut Memory, data: u16) {
+    fn mcall_display_or_flow(registers: &mut Registers, memory: &mut Memory, data: u16) {
         match data {
             0xE0 => unimplemented!("clear display"),
-            0xEE => unimplemented!("ret"),
+            0xEE => {
+                trace!("ret");
+                let new_pc = registers.stack_pop16();
+                registers.pc = Wrapping(new_pc);
+            },
             _ => panic!("machine code routes are unsupported"),
         }
     }
@@ -75,6 +105,7 @@ impl Instruction {
 
     /// Goto changes the PC pointer to the fixed location
     fn goto(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        registers.stack_push16(data);
         registers.pc = Wrapping(data);
     }
 
@@ -83,8 +114,13 @@ impl Instruction {
     }
 
     /// Call pushes a return address and then changes I to the given location
-    fn call(_registers: &mut Registers, _memory: &mut Memory, _data: u16) {
-        unimplemented!("call");
+    fn call(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        trace!("call instr");
+        // First save the current PC + 2
+        registers.stack_push16(registers.pc.0 + INSTRUCTION_SIZE);
+
+        // Jump to the immediate
+        registers.pc = Wrapping(data);
     }
 
     fn call_to_string(data: u16) -> String {
@@ -122,9 +158,9 @@ impl Instruction {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.inc_pc(
         if registers.v[register as usize] == Wrapping(data) {
-           2
+           4
         } else {
-           1
+           2
         });
     }
 
@@ -139,9 +175,9 @@ impl Instruction {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.inc_pc(
         if registers.v[register as usize] != Wrapping(data) {
-           2
+           4
         } else {
-           1
+           2
         });
     }
 
@@ -154,7 +190,7 @@ impl Instruction {
     /// run it.
     fn two_reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register1, register2) = Self::two_registers_from_data(data);
-        registers.inc_pc(if registers.v[register1] != registers.v[register2] { 2 } else { 1 });
+        registers.inc_pc(if registers.v[register1] != registers.v[register2] { 4 } else { 2 });
     }
 
     fn two_reg_equal_to_string(data: u16) -> String {
@@ -195,7 +231,7 @@ impl Instruction {
 
     fn two_registers_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register1, register2) = Self::two_registers_from_data(data);
-        registers.inc_pc(if registers.v[register1] != registers.v[register2] { 2 } else { 1 });
+        registers.inc_pc(if registers.v[register1] != registers.v[register2] { 4 } else { 2 });
     }
 
     fn two_registers_not_equal_to_string(data: u16) -> String {
@@ -260,9 +296,9 @@ impl Instruction {
         unimplemented!();
     }
 
-    pub fn main_op_table() -> [Self; 15] {
+    pub fn main_op_table() -> [Self; 16] {
 
-        let call_instruction = Self {
+        let mcall_instruction = Self {
             desc: format!("call XXX"),
             execute: Self::mcall_display_or_flow,
             to_string: Self::mcall_display_or_flow_to_string
@@ -358,13 +394,13 @@ impl Instruction {
             to_string: Self::load_or_store_to_string,
         };
 
-        [call_instruction, goto_instruction, reg_eq, reg_neq, two_reg_eq, load_immediate, add_immediate, math_or_bitop, two_reg_not_equal, set_i, jump_imm_plus_register, masked_random, draw_sprite, key_op, load_or_store]
+        [mcall_instruction, goto_instruction, call_instruction, reg_eq, reg_neq, two_reg_eq, load_immediate, add_immediate, math_or_bitop, two_reg_not_equal, set_i, jump_imm_plus_register, masked_random, draw_sprite, key_op, load_or_store]
     }
 }
 
 pub struct Cpu {
     pub registers: Registers,
-    pub main_op_table: [Instruction; 15],
+    pub main_op_table: [Instruction; 16],
 }
 
 impl Cpu {
@@ -375,6 +411,7 @@ impl Cpu {
                 v: [Wrapping(0); 16],
                 i: Wrapping(0),
                 stack: [Wrapping(0); 256],
+                stack_idx: 0,
                 delay: Wrapping(0),
                 sound: Wrapping(0)
             },
@@ -412,6 +449,16 @@ mod instruction_tests {
         data[1] = (address & 0x00FF) as u8;
     }
 
+    fn assemble_call(data: &mut [u8], address: u16) {
+        data[0] = (2 << 4) | ((address >> 8) & 0x0F) as u8;
+        data[1] = (address & 0x00FF) as u8;
+    }
+
+    fn assemble_ret(data: &mut [u8]) {
+        data[0] = 0x00;
+        data[1] = 0xEE;
+    }
+
     #[test]
     fn goto() {
 		let mut program = [0; 256];
@@ -421,5 +468,43 @@ mod instruction_tests {
         cpu.step(&mut memory);
 		info!("{:?}", cpu.registers);
 		assert!(cpu.registers.pc == Wrapping(0x00AF));
+    }
+
+    #[test]
+    fn call() {
+        let mut program = [0; 256];
+        assemble_call(&mut program, 0xADE);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        // Mark the stack location we expect to get overwritten to be non-zero
+        cpu.registers.stack[0] = Wrapping(0xAA);
+        cpu.registers.stack[1] = Wrapping(0xBB);
+        cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.stack_idx, 2);
+        assert_eq!(cpu.registers.stack[0], Wrapping(0x00));
+        assert_eq!(cpu.registers.stack[1], Wrapping(0x02));
+        assert_eq!(cpu.registers.pc, Wrapping(0xADE));
+    }
+
+    #[test]
+    fn ret() {
+        let mut program = [0; 256];
+        assemble_call(&mut program, 0x10);
+        assemble_ret(&mut program[0x10..]);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        // Mark the stack location we expect to get overwritten to be non-zero
+        cpu.registers.stack[0] = Wrapping(0xAA);
+        cpu.registers.stack[1] = Wrapping(0xBB);
+        cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.stack_idx, 2);
+        assert_eq!(cpu.registers.stack[0], Wrapping(0x00));
+        assert_eq!(cpu.registers.stack[1], Wrapping(0x02));
+        assert_eq!(cpu.registers.pc, Wrapping(0x10));
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.stack_idx, 0);
+        assert_eq!(cpu.registers.pc, Wrapping(0x02));
     }
 }
