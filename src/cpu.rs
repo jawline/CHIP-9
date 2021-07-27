@@ -1,3 +1,4 @@
+use rand::rng;
 use log::{info, trace};
 use std::num::Wrapping;
 use crate::memory::Memory;
@@ -40,6 +41,9 @@ pub struct Registers {
   /// The sound timer emits a sound if it is not zero.
   /// This timer counts down to zero at 60hz and then stops.
   pub sound: Wrapping<u8>,
+
+  /// Used to generate random values for the masked random command
+  pub rng: rand::ThreadRng,
 }
 
 impl Registers {
@@ -265,7 +269,8 @@ impl Instruction {
     fn masked_random(registers: &mut Registers, memory: &mut Memory, data: u16) {
         println!("TODO: Rand");
         let (register, mask) = Self::register_and_immediate_from_data(data);
-        registers.v[register] = Wrapping(45 & mask);
+        let rval: u8 = registers.rng.gen::<u8>();
+        registers.v[register].0 = rval & mask;
         registers.inc_pc(1);
     }
 
@@ -417,7 +422,8 @@ impl Cpu {
                 stack: [Wrapping(0); 256],
                 stack_idx: 0,
                 delay: Wrapping(0),
-                sound: Wrapping(0)
+                sound: Wrapping(0),
+                rng: rand::thread_rng(),
             },
             main_op_table: Instruction::main_op_table(),
         }
