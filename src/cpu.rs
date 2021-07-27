@@ -191,7 +191,8 @@ impl Instruction {
     /// run it.
     fn two_reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register1, register2) = Self::two_registers_from_data(data);
-        registers.inc_pc(if registers.v[register1] != registers.v[register2] { 4 } else { 2 });
+        trace!("eq v{:x} v{:x}", register1, register2);
+        registers.inc_pc(if registers.v[register1] == registers.v[register2] { 4 } else { 2 });
     }
 
     fn two_reg_equal_to_string(data: u16) -> String {
@@ -203,6 +204,7 @@ impl Instruction {
     fn load_immediate(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.v[register] = Wrapping(data);
+        registers.inc_pc(2);
     }
 
     fn load_immediate_to_string(data: u16) -> String {
@@ -214,7 +216,7 @@ impl Instruction {
     fn add_immediate(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.v[register] = registers.v[register] + Wrapping(data);
-        registers.inc_pc(1);
+        registers.inc_pc(2);
     }
 
     fn add_immediate_to_string(data: u16) -> String {
@@ -241,8 +243,9 @@ impl Instruction {
     }
 
     fn set_i(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        trace!("seti {:x}", data);
         registers.i = Wrapping(data);
-        registers.inc_pc(1);
+        registers.inc_pc(2);
     }
 
     fn set_i_to_string(data: u16) -> String {
@@ -465,6 +468,46 @@ mod instruction_tests {
         data[1] = imm;
     }
 
+    fn assemble_reg_neq_imm(data: &mut [u8], reg: u8, imm: u8) {
+        data[0] = (4 << 4) | (reg & 0x0F);
+        data[1] = imm;
+    }
+
+    fn assemble_two_reg_eq(data: &mut [u8], reg: u8, reg2: u8) {
+        data[0] = (5 << 4) | (reg & 0x0F);
+        data[1] = (reg2 << 4);
+    }
+
+    fn assemble_two_reg_neq(data: &mut [u8], reg: u8, reg2: u8) {
+        data[0] = (0x9 << 4) | (reg & 0x0F);
+        data[1] = (reg2 << 4);
+    }
+
+    fn assemble_load_imm(data: &mut [u8], reg: u8, imm: u8) {
+        data[0] = (6 << 4) | (reg & 0x0F);
+        data[1] = imm;
+    }
+
+    fn assemble_add_imm(data: &mut [u8], reg: u8, imm: u8) {
+        data[0] = (7 << 4) | (reg & 0x0F);
+        data[1] = imm;
+    }
+
+    fn assemble_reg_mv(data: &mut [u8], dst: u8, src: u8) {
+        data[0] = (8 << 4) | (dst & 0x0F);
+        data[1] = (src << 4);
+    }
+
+    fn assemble_set_i(data: &mut [u8], dst: u16) {
+        data[0] = (0xA << 4) | (((dst >> 8) & 0x0F) as u8);
+        data[1] = (dst & 0xFF) as u8;
+    }
+
+    fn assemble_pc_plus_r(data: &mut [u8], dst: u16) {
+        data[0] = (0xB << 4) | (((dst >> 8) & 0x0F) as u8);
+        data[1] = (dst & 0xFF) as u8;
+    }
+
     #[test]
     fn goto() {
 		let mut program = [0; 256];
@@ -512,6 +555,112 @@ mod instruction_tests {
         cpu.step(&mut memory);
         assert_eq!(cpu.registers.pc.0, 0x02);
 
+    }
+
+    #[test]
+    fn reg_neq_imm() {
+        let mut program = [0; 256];
+        assemble_reg_neq_imm(&mut program, 5, 0xFE);
+
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+
+        cpu.registers.v[5] = Wrapping(0xFE);
+
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.pc.0, 0x02);
+
+        cpu.registers.pc = Wrapping(0);
+        cpu.registers.v[5] = Wrapping(0xAE);
+
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.pc.0, 0x04);
+    }
+
+    #[test]
+    fn two_reg_eq() {
+        let mut program = [0; 256];
+        assemble_two_reg_eq(&mut program, 0x7, 0xF);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x7] = Wrapping(0xFE);
+        cpu.registers.v[0xF] = Wrapping(0xAA);
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.pc.0, 2);
+        cpu.registers.pc.0 = 0x0;
+        cpu.registers.v[0xF] = Wrapping(0xFE);
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.pc.0, 4);
+    }
+
+    #[test]
+    fn two_reg_neq() {
+        let mut program = [0; 256];
+        assemble_two_reg_neq(&mut program, 0x7, 0xF);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x7] = Wrapping(0xFE);
+        cpu.registers.v[0xF] = Wrapping(0xAA);
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.pc.0, 4);
+        cpu.registers.pc.0 = 0x0;
+        cpu.registers.v[0xF] = Wrapping(0xFE);
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.pc.0, 2);
+    }
+
+
+    #[test]
+    fn load_imm() {
+        let mut program = [0; 256];
+        assemble_load_imm(&mut program, 7, 0xFE);
+
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.v[7].0, 0xFE);
+        assert_eq!(cpu.registers.pc.0, 0x2);
+    }
+
+    #[test]
+    fn add_imm() {
+        let mut program = [0; 256];
+        assemble_add_imm(&mut program, 3, 2);
+        assemble_add_imm(&mut program[2..], 3, 8);
+
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.v[3].0, 0x2);
+        assert_eq!(cpu.registers.pc.0, 0x2);
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.v[3].0, 0xA);
+
+        assert_eq!(cpu.registers.pc.0, 0x4);
+    }
+
+    #[test]
+    fn set_i() {
+        let mut program = [0; 256];
+        assemble_set_i(&mut program, 0x8FE);
+
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.i.0, 0x8FE);
+        assert_eq!(cpu.registers.pc.0, 0x2);
+    }
+
+    #[test]
+    fn pc_plus_reg() {
+        let mut program = [0; 256];
+        assemble_pc_plus_r(&mut program, 0x8FE);
+
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0].0 = 0xFF;
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.pc.0, 0x8FE + 0xFF);
     }
 
     #[test]
