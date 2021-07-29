@@ -1,4 +1,4 @@
-use rand::rng;
+use rand::prelude::*;
 use log::{info, trace};
 use std::num::Wrapping;
 use crate::memory::Memory;
@@ -22,9 +22,9 @@ pub const NIBBLE_DATA_MASK: u16 = 0x000F;
 #[derive(Debug)]
 pub struct Registers {
 
-    /// The CHIP architecture has 16 8-bit general purpose registers.
-    /// Register v[f] also doubles as the carry flag, collision flag, or borrow flag dependent on
-    /// the operation.
+  /// The CHIP architecture has 16 8-bit general purpose registers.
+  /// Register v[f] also doubles as the carry flag, collision flag, or borrow flag dependent on
+  /// the operation.
   pub v: [Wrapping<u8>; 16],
   /// The program counter
   pub pc: Wrapping<u16>,
@@ -43,7 +43,7 @@ pub struct Registers {
   pub sound: Wrapping<u8>,
 
   /// Used to generate random values for the masked random command
-  pub rng: rand::ThreadRng,
+  pub rng: ThreadRng,
 }
 
 impl Registers {
@@ -271,7 +271,7 @@ impl Instruction {
         let (register, mask) = Self::register_and_immediate_from_data(data);
         let rval: u8 = registers.rng.gen::<u8>();
         registers.v[register].0 = rval & mask;
-        registers.inc_pc(1);
+        registers.inc_pc(2);
     }
 
     fn masked_random_to_string(data: u16) -> String {
@@ -302,6 +302,54 @@ impl Instruction {
     }
 
     fn load_or_store_to_string(data: u16) -> String {
+        unimplemented!();
+    }
+
+    fn mv_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        registers.v[register1] = registers.v[register2];
+        registers.inc_pc(2);
+    }
+
+    fn mv_register_to_string(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("mv v{:x} v{:x}", register1, register2)
+    }
+
+    fn or_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        registers.v[register1] |= registers.v[register2];
+        registers.inc_pc(2);
+    }
+
+    fn or_register_to_string(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("or v{:x} v{:x}", register1, register2)
+    }
+
+    fn and_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        registers.v[register1] &= registers.v[register2];
+        registers.inc_pc(2);
+    }
+
+    fn and_register_to_string(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("and v{:x} v{:x}", register1, register2)
+    }
+
+    fn xor_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        registers.v[register1] ^= registers.v[register2];
+        registers.inc_pc(2);
+    }
+
+    fn xor_register_to_string(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("xor v{:x} v{:x}", register1, register2)
+    }
+
+    pub fn math_op_table() -> [Self; 15] {
         unimplemented!();
     }
 
