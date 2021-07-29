@@ -349,6 +349,42 @@ impl Instruction {
         format!("xor v{:x} v{:x}", register1, register2)
     }
 
+    fn add_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        let result = registers.v[register1] + registers.v[register2];
+
+        if result < registers.v[register1] {
+            registers.v[0xF] = Wrapping(1);
+        }
+
+        registers.v[register1] = result;
+
+        registers.inc_pc(2);
+    }
+
+    fn add_register_to_string(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("add v{:x} v{:x}", register1, register2)
+    }
+
+    fn sub_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        let result = registers.v[register1] - registers.v[register2];
+
+        if result > registers.v[register1] {
+            registers.v[0xF] = Wrapping(1);
+        }
+
+        registers.v[register1] = result;
+
+        registers.inc_pc(2);
+    }
+
+    fn sub_register_to_string(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("sub v{:x} v{:x}", register1, register2)
+    }
+
     pub fn math_op_table() -> [Self; 15] {
         unimplemented!();
     }
