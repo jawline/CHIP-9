@@ -385,6 +385,18 @@ impl Instruction {
         format!("sub v{:x} v{:x}", register1, register2)
     }
 
+    fn shr_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        registers.v[0xF].0 = (registers.v[register1].0 >> 1) & 0x1;
+        registers.v[register1].0 >>= 1;
+        registers.inc_pc(2);
+    }
+
+    fn shr_register_to_string(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("shr v{:x}", register1)
+    }
+
     pub fn math_op_table() -> [Self; 15] {
         unimplemented!();
     }
