@@ -427,7 +427,7 @@ impl Instruction {
         format!("rsub v{:x} v{:x}", register1, register2)
     }
 
-    pub fn math_op_table() -> [Self; 15] {
+    pub fn math_op_table() -> [Self; 9] {
         let mv = Self {
             desc: format!("mv X Y"),
             execute: Self::mv_register,
@@ -482,7 +482,7 @@ impl Instruction {
             to_string: Self::shl_register_to_string,
         };
 
-        unimplemented!();
+        [mv, or, and, xor, add, sub, shr, rsub, shl]
     }
 
     pub fn main_op_table() -> [Self; 16] {
