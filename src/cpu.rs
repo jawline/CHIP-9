@@ -387,7 +387,7 @@ impl Instruction {
 
     fn shr_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
         let (register1, register2) = Self::two_registers_from_data(data);
-        registers.v[0xF].0 = (registers.v[register1].0 >> 1) & 0x1;
+        registers.v[0xF].0 = registers.v[register1].0 & 0x1;
         registers.v[register1].0 >>= 1;
         registers.inc_pc(2);
     }
@@ -397,7 +397,91 @@ impl Instruction {
         format!("shr v{:x}", register1)
     }
 
+    fn rev_sub_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        let result = registers.v[register2] - registers.v[register1];
+
+        if result > registers.v[register2] {
+            registers.v[0xF] = Wrapping(1);
+        }
+
+        registers.v[register1] = result;
+
+        registers.inc_pc(2);
+    }
+
+    fn shl_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        registers.v[0xF].0 = registers.v[register1].0 & (0x1 << 7);
+        registers.v[register1].0 <<= 1;
+        registers.inc_pc(2);
+    }
+
+    fn shl_register_to_string(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("shl v{:x}", register1)
+    }
+
+    fn rev_sub_register_to_string(data: u16) -> String {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        format!("rsub v{:x} v{:x}", register1, register2)
+    }
+
     pub fn math_op_table() -> [Self; 15] {
+        let mv = Self {
+            desc: format!("mv X Y"),
+            execute: Self::mv_register,
+            to_string: Self::mv_register_to_string,
+        };
+
+        let or = Self {
+            desc: format!("or X Y"),
+            execute: Self::or_register,
+            to_string: Self::or_register_to_string,
+        };
+
+        let and = Self {
+            desc: format!("xor X Y"),
+            execute: Self::and_register,
+            to_string: Self::and_register_to_string
+        };
+
+        let xor = Self {
+            desc: format!("xor X Y"),
+            execute: Self::xor_register,
+            to_string: Self::xor_register_to_string,
+        };
+
+        let add = Self {
+            desc: format!("add X Y"),
+            execute: Self::add_register,
+            to_string: Self::add_register_to_string,
+        };
+
+        let sub = Self {
+            desc: format!("sub X Y"),
+            execute: Self::sub_register,
+            to_string: Self::sub_register_to_string,
+        };
+
+        let shr = Self {
+            desc: format!("shr X Y"),
+            execute: Self::shr_register,
+            to_string: Self::shr_register_to_string,
+        };
+
+        let rsub = Self {
+            desc: format!("rsub X Y"),
+            execute: Self::rev_sub_register,
+            to_string: Self::rev_sub_register_to_string,
+        };
+
+        let shl = Self {
+            desc: format!("shl X Y"),
+            execute: Self::shl_register,
+            to_string: Self::shl_register_to_string,
+        };
+
         unimplemented!();
     }
 
