@@ -84,7 +84,7 @@ pub struct Instruction {
     /// Execute the opcode, with the change in state being reflected in registers and memory
     pub execute: fn(registers: &mut Registers, memory: &mut Memory, data: u16, op_tables: &OpTables),
     /// Granular description of the opcode that requires the opcode data (not just the first byte)
-    pub to_string: fn(data: u16) -> String,
+    pub to_string: fn(data: u16, op_tables: &OpTables) -> String,
 }
 
 impl Instruction {
@@ -104,7 +104,7 @@ impl Instruction {
         }
     }
 
-    fn mcall_display_or_flow_to_string(data: u16) -> String {
+    fn mcall_display_or_flow_to_string(data: u16, _op_table: &OpTables) -> String {
        match data {
            0xE0 => format!("clear_display"),
            0xEE => format!("return"),
@@ -118,7 +118,7 @@ impl Instruction {
         registers.pc = Wrapping(data);
     }
 
-    fn goto_to_string(data: u16) -> String {
+    fn goto_to_string(data: u16, _op_table: &OpTables) -> String {
         format!("goto {:x}", data)
     }
 
@@ -132,7 +132,7 @@ impl Instruction {
         registers.pc = Wrapping(data);
     }
 
-    fn call_to_string(data: u16) -> String {
+    fn call_to_string(data: u16, _op_table: &OpTables) -> String {
         format!("call {:x}", data)
     }
 
@@ -174,7 +174,7 @@ impl Instruction {
         });
     }
 
-    fn reg_equal_to_string(data: u16) -> String {
+    fn reg_equal_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register, data) = Self::register_and_immediate_from_data(data);
         format!("eq v{} {}", register, data)
     }
@@ -191,7 +191,7 @@ impl Instruction {
         });
     }
 
-    fn reg_not_equal_to_string(data: u16) -> String {
+    fn reg_not_equal_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register, data) = Self::register_and_immediate_from_data(data);
         format!("neq v{} {}", register, data)
     }
@@ -204,7 +204,7 @@ impl Instruction {
         registers.inc_pc(if registers.v[register1] == registers.v[register2] { 4 } else { 2 });
     }
 
-    fn two_reg_equal_to_string(data: u16) -> String {
+    fn two_reg_equal_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("eq v{} v{}", register1, register2)
     }
@@ -216,7 +216,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn load_immediate_to_string(data: u16) -> String {
+    fn load_immediate_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register, data) = Self::register_and_immediate_from_data(data);
         format!("ld v{} {}", register, data)
     }
@@ -228,17 +228,19 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn add_immediate_to_string(data: u16) -> String {
+    fn add_immediate_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register, data) = Self::register_and_immediate_from_data(data);
         format!("add v{} {}", register, data)
     }
 
-    fn math_or_bitop(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
-        unimplemented!("math or binop row")
+    fn math_or_bitop(registers: &mut Registers, memory: &mut Memory, data: u16, op_tables: &OpTables) {
+        let math_opcode = data & 0x000F;
+        (op_tables.math_op_table[math_opcode as usize].execute)(registers, memory, data, op_tables);
     }
 
-    fn math_or_bitop_to_string(data: u16) -> String {
-        unimplemented!("math or binop tostring")
+    fn math_or_bitop_to_string(data: u16, op_table: &OpTables) -> String {
+        let math_opcode = data & 0x000F;
+        (op_tables.math_op_table[math_opcode as usize].to_string)(data, op_tables)
     }
 
     fn two_registers_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
@@ -246,7 +248,7 @@ impl Instruction {
         registers.inc_pc(if registers.v[register1] != registers.v[register2] { 4 } else { 2 });
     }
 
-    fn two_registers_not_equal_to_string(data: u16) -> String {
+    fn two_registers_not_equal_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("neq v{} v{}", register1, register2)
     }
@@ -257,7 +259,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn set_i_to_string(data: u16) -> String {
+    fn set_i_to_string(data: u16, _op_table: &OpTables) -> String {
         format!("ld i {:x}", data)
     }
 
@@ -265,7 +267,7 @@ impl Instruction {
         registers.pc = Wrapping(registers.v[0].0 as u16) + Wrapping(data);
     }
 
-    fn jump_immediate_plus_register_to_string(data: u16) -> String {
+    fn jump_immediate_plus_register_to_string(data: u16, _op_table: &OpTables) -> String {
         format!("jump v0 + {}", data)
     }
 
@@ -279,7 +281,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn masked_random_to_string(data: u16) -> String {
+    fn masked_random_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register, mask) = Self::register_and_immediate_from_data(data);
         format!("rand v{} {}", register, mask)
     }
@@ -288,7 +290,7 @@ impl Instruction {
         unimplemented!();
     }
 
-    fn draw_sprite_to_string(data: u16) -> String {
+    fn draw_sprite_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         let imm = data & NIBBLE_DATA_MASK;
         format!("draw v{} v{} {}", register1, register2, imm)
@@ -298,7 +300,7 @@ impl Instruction {
         unimplemented!();
     }
 
-    fn key_op_to_string(data: u16) -> String {
+    fn key_op_to_string(data: u16, _op_table: &OpTables) -> String {
         unimplemented!();
     }
 
@@ -306,7 +308,7 @@ impl Instruction {
         unimplemented!();
     }
 
-    fn load_or_store_to_string(data: u16) -> String {
+    fn load_or_store_to_string(data: u16, _op_table: &OpTables) -> String {
         unimplemented!();
     }
 
@@ -316,7 +318,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn mv_register_to_string(data: u16) -> String {
+    fn mv_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("mv v{:x} v{:x}", register1, register2)
     }
@@ -327,7 +329,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn or_register_to_string(data: u16) -> String {
+    fn or_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("or v{:x} v{:x}", register1, register2)
     }
@@ -338,7 +340,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn and_register_to_string(data: u16) -> String {
+    fn and_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("and v{:x} v{:x}", register1, register2)
     }
@@ -349,7 +351,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn xor_register_to_string(data: u16) -> String {
+    fn xor_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("xor v{:x} v{:x}", register1, register2)
     }
@@ -367,7 +369,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn add_register_to_string(data: u16) -> String {
+    fn add_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("add v{:x} v{:x}", register1, register2)
     }
@@ -385,7 +387,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn sub_register_to_string(data: u16) -> String {
+    fn sub_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("sub v{:x} v{:x}", register1, register2)
     }
@@ -397,7 +399,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn shr_register_to_string(data: u16) -> String {
+    fn shr_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("shr v{:x}", register1)
     }
@@ -422,12 +424,12 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn shl_register_to_string(data: u16) -> String {
+    fn shl_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("shl v{:x}", register1)
     }
 
-    fn rev_sub_register_to_string(data: u16) -> String {
+    fn rev_sub_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("rsub v{:x} v{:x}", register1, register2)
     }
