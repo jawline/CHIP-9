@@ -513,24 +513,6 @@ impl Instruction {
         format!("shr v{:x}", register1)
     }
 
-    fn rev_sub_register(
-        registers: &mut Registers,
-        _memory: &mut Memory,
-        data: u16,
-        _op_tables: &OpTables,
-    ) {
-        let (register1, register2) = Self::two_registers_from_data(data);
-        let result = registers.v[register2] - registers.v[register1];
-
-        if result > registers.v[register2] {
-            registers.v[0xF] = Wrapping(1);
-        }
-
-        registers.v[register1] = result;
-
-        registers.inc_pc(2);
-    }
-
     fn shl_register(
         registers: &mut Registers,
         _memory: &mut Memory,
@@ -546,6 +528,26 @@ impl Instruction {
     fn shl_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, _register2) = Self::two_registers_from_data(data);
         format!("shl v{:x}", register1)
+    }
+
+    fn rev_sub_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
+        let (register1, register2) = Self::two_registers_from_data(data);
+        let result = registers.v[register2] - registers.v[register1];
+
+        registers.v[0xF] = if result > registers.v[register2] {
+            Wrapping(1)
+        } else {
+            Wrapping(0)
+        };
+
+        registers.v[register1] = result;
+
+        registers.inc_pc(2);
     }
 
     fn rev_sub_register_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -858,6 +860,18 @@ mod instruction_tests {
         math_bitop_core(data, dst, src, 5);
     }
 
+    fn assemble_reg_shr(data: &mut [u8], dst: u8, src: u8) {
+        math_bitop_core(data, dst, src, 6);
+    }
+
+    fn assemble_reg_rsub(data: &mut [u8], dst: u8, src: u8) {
+        math_bitop_core(data, dst, src, 7);
+    }
+
+    fn assemble_reg_shl(data: &mut [u8], dst: u8, src: u8) {
+        math_bitop_core(data, dst, src, 8);
+    }
+
     fn assemble_set_i(data: &mut [u8], dst: u16) {
         data[0] = (0xA << 4) | (((dst >> 8) & 0x0F) as u8);
         data[1] = (dst & 0xFF) as u8;
@@ -928,6 +942,32 @@ mod instruction_tests {
     }
 
     #[test]
+    fn shr() {
+        let mut program = [0; 256];
+        assemble_reg_shr(&mut program, 0x2, 0x0);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 64;
+        cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2].0, 32);
+        assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
+    fn shl() {
+        let mut program = [0; 256];
+        assemble_reg_shl(&mut program, 0x2, 0x0);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 64;
+        cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2].0, 128);
+        assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
     fn add_reg() {
         let mut program = [0; 256];
         assemble_reg_add(&mut program, 0x2, 0x4);
@@ -991,6 +1031,40 @@ mod instruction_tests {
         info!("{:?}", cpu.registers);
         assert_eq!(cpu.registers.v[0x2], Wrapping(64_u8) + Wrapping(128_u8));
         assert_eq!(cpu.registers.v[0x4].0, 128);
+        assert_eq!(cpu.registers.v[0xF].0, 1);
+        assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
+    fn rsub_reg() {
+        let mut program = [0; 256];
+        assemble_reg_rsub(&mut program, 0x2, 0x4);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 40;
+        cpu.registers.v[0x4].0 = 64;
+        cpu.registers.v[0xF].0 = 40;
+        cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2].0, 64 - 40);
+        assert_eq!(cpu.registers.v[0x4].0, 64);
+        assert_eq!(cpu.registers.v[0xF].0, 0);
+        assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
+    fn rsub_reg_carry() {
+        let mut program = [0; 256];
+        assemble_reg_rsub(&mut program, 0x2, 0x4);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 128;
+        cpu.registers.v[0x4].0 = 64;
+        cpu.registers.v[0xF].0 = 40;
+        cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2], Wrapping(64_u8) + Wrapping(128_u8));
+        assert_eq!(cpu.registers.v[0x4].0, 64);
         assert_eq!(cpu.registers.v[0xF].0, 1);
         assert_eq!(cpu.registers.pc.0, 0x002);
     }
