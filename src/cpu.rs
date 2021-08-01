@@ -690,9 +690,25 @@ mod instruction_tests {
         data[1] = imm;
     }
 
-    fn assemble_reg_mv(data: &mut [u8], dst: u8, src: u8) {
+    fn math_bitop_core(data: &mut [u8], dst: u8, src: u8, mathop: u8) {
         data[0] = (8 << 4) | (dst & 0x0F);
-        data[1] = src << 4;
+        data[1] = (src << 4) | mathop;
+    }
+
+    fn assemble_reg_mv(data: &mut [u8], dst: u8, src: u8) {
+        math_bitop_core(data, dst, src, 0);
+    }
+
+    fn assemble_reg_or(data: &mut [u8], dst: u8, src: u8) {
+        math_bitop_core(data, dst, src, 1);
+    }
+
+    fn assemble_reg_and(data: &mut [u8], dst: u8, src: u8) {
+        math_bitop_core(data, dst, src, 2);
+    }
+
+    fn assemble_reg_xor(data: &mut [u8], dst: u8, src: u8) {
+        math_bitop_core(data, dst, src, 3);
     }
 
     fn assemble_set_i(data: &mut [u8], dst: u16) {
@@ -715,6 +731,52 @@ mod instruction_tests {
         cpu.step(&mut memory);
 		info!("{:?}", cpu.registers);
         assert_eq!(cpu.registers.v[0x2].0, 40);
+        assert_eq!(cpu.registers.v[0x4].0, 40);
+		assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
+    fn or() {
+		let mut program = [0; 256];
+		assemble_reg_or(&mut program, 0x2, 0x4);
+		let mut memory = Memory::of_bytes(&program);
+		let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 64;
+        cpu.registers.v[0x4].0 = 40;
+        cpu.step(&mut memory);
+		info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2].0, 40 | 64);
+        assert_eq!(cpu.registers.v[0x4].0, 40);
+		assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
+    fn and() {
+		let mut program = [0; 256];
+		assemble_reg_and(&mut program, 0x2, 0x4);
+		let mut memory = Memory::of_bytes(&program);
+		let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 64;
+        cpu.registers.v[0x4].0 = 40;
+        cpu.step(&mut memory);
+		info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2].0, 40 &64);
+        assert_eq!(cpu.registers.v[0x4].0, 40);
+		assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
+    fn xor() {
+		let mut program = [0; 256];
+		assemble_reg_xor(&mut program, 0x2, 0x4);
+		let mut memory = Memory::of_bytes(&program);
+		let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 64;
+        cpu.registers.v[0x4].0 = 40;
+        cpu.step(&mut memory);
+		info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2].0, 40 ^ 64);
+        assert_eq!(cpu.registers.v[0x4].0, 40);
 		assert_eq!(cpu.registers.pc.0, 0x002);
     }
 
