@@ -624,6 +624,36 @@ impl Instruction {
         format!("mv I, sprite_addr(V{})", register1)
     }
 
+    fn bcd_vx(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        unimplemented!("bcd vx");
+    }
+
+    fn bcd_vx_to_string(data: u16, _op_table: &OpTables) -> String {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        format!("bcd v{}", register1)
+    }
+
+    fn reg_dump(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        unimplemented!("reg_dump vx");
+    }
+
+    fn reg_dump_to_string(data: u16, _op_table: &OpTables) -> String {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        format!("reg_dump v0, v{}", register1)
+    }
+
+    fn reg_load(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        unimplemented!("reg_load vx");
+    }
+
+    fn reg_load_to_string(data: u16, _op_table: &OpTables) -> String {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        format!("reg_load v0, v{}", register1)
+    }
+
     pub fn load_op_table() -> [Self; 0x66] {
         let mut load_op_table: [Self; 0x66] = (0..0x66)
             .map(|_x| Self {
