@@ -46,6 +46,11 @@ pub struct Registers {
   pub rng: ThreadRng,
 }
 
+pub struct OpTables {
+    pub main_op_table: [Instruction; 16],
+    pub math_op_table: [Instruction; 9],
+}
+
 impl Registers {
 
     /// Increment the PC by a given amount
@@ -77,7 +82,7 @@ pub struct Instruction {
     /// Rough description of the opcode from the first byte
     pub desc: String,
     /// Execute the opcode, with the change in state being reflected in registers and memory
-    pub execute: fn(registers: &mut Registers, memory: &mut Memory, data: u16),
+    pub execute: fn(registers: &mut Registers, memory: &mut Memory, data: u16, op_tables: &OpTables),
     /// Granular description of the opcode that requires the opcode data (not just the first byte)
     pub to_string: fn(data: u16) -> String,
 }
@@ -87,7 +92,7 @@ impl Instruction {
     /// The zero opcode can be either clear display, ret, or machine call (Call an instruction
     /// written in machine code) depending on parameters. We merge these all into one opcode
     /// execution.
-    fn mcall_display_or_flow(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn mcall_display_or_flow(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         match data {
             0xE0 => unimplemented!("clear display"),
             0xEE => {
@@ -108,7 +113,7 @@ impl Instruction {
     }
 
     /// Goto changes the PC pointer to the fixed location
-    fn goto(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn goto(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         registers.stack_push16(data);
         registers.pc = Wrapping(data);
     }
@@ -118,7 +123,7 @@ impl Instruction {
     }
 
     /// Call pushes a return address and then changes I to the given location
-    fn call(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn call(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         trace!("call instr");
         // First save the current PC + 2
         registers.stack_push16(registers.pc.0 + INSTRUCTION_SIZE);
@@ -158,7 +163,7 @@ impl Instruction {
 
     /// Checks if a register and an immediate value are equal. If they are equal then we
     /// skip the next instruction, otherwise we run the next instruction.
-    fn reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         trace!("eq v{:x} {:x}", register, data);
         registers.inc_pc(
@@ -176,7 +181,7 @@ impl Instruction {
 
     /// Checks if a register and an immediate are not equal. If they are not equal then skip the
     /// next instruction, otherwise run the next instruction.
-    fn reg_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn reg_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.inc_pc(
         if registers.v[register as usize] != Wrapping(data) {
@@ -193,7 +198,7 @@ impl Instruction {
 
     /// Checks if two registers are equal. If they are then skip the next instruction, otherwise
     /// run it.
-    fn two_reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn two_reg_equal(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         trace!("eq v{:x} v{:x}", register1, register2);
         registers.inc_pc(if registers.v[register1] == registers.v[register2] { 4 } else { 2 });
@@ -205,7 +210,7 @@ impl Instruction {
     }
 
     /// Load an immediate into a register
-    fn load_immediate(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn load_immediate(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.v[register] = Wrapping(data);
         registers.inc_pc(2);
@@ -217,7 +222,7 @@ impl Instruction {
     }
 
     /// Same as load immediate but add it to the register rather than add
-    fn add_immediate(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn add_immediate(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.v[register] = registers.v[register] + Wrapping(data);
         registers.inc_pc(2);
@@ -228,7 +233,7 @@ impl Instruction {
         format!("add v{} {}", register, data)
     }
 
-    fn math_or_bitop(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn math_or_bitop(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         unimplemented!("math or binop row")
     }
 
@@ -236,7 +241,7 @@ impl Instruction {
         unimplemented!("math or binop tostring")
     }
 
-    fn two_registers_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn two_registers_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.inc_pc(if registers.v[register1] != registers.v[register2] { 4 } else { 2 });
     }
@@ -246,7 +251,7 @@ impl Instruction {
         format!("neq v{} v{}", register1, register2)
     }
 
-    fn set_i(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn set_i(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         trace!("seti {:x}", data);
         registers.i = Wrapping(data);
         registers.inc_pc(2);
@@ -256,7 +261,7 @@ impl Instruction {
         format!("ld i {:x}", data)
     }
 
-    fn jump_immediate_plus_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn jump_immediate_plus_register(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         registers.pc = Wrapping(registers.v[0].0 as u16) + Wrapping(data);
     }
 
@@ -266,7 +271,7 @@ impl Instruction {
 
     /// The masked random instruction generates a random value between 0 and 255, masks it with an
     /// immediate (& imm) and then places it in a specified register.
-    fn masked_random(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn masked_random(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         println!("TODO: Rand");
         let (register, mask) = Self::register_and_immediate_from_data(data);
         let rval: u8 = registers.rng.gen::<u8>();
@@ -279,7 +284,7 @@ impl Instruction {
         format!("rand v{} {}", register, mask)
     }
 
-    fn draw_sprite(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn draw_sprite(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         unimplemented!();
     }
 
@@ -289,7 +294,7 @@ impl Instruction {
         format!("draw v{} v{} {}", register1, register2, imm)
     }
 
-    fn key_op(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn key_op(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         unimplemented!();
     }
 
@@ -297,7 +302,7 @@ impl Instruction {
         unimplemented!();
     }
 
-    fn load_or_store(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn load_or_store(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         unimplemented!();
     }
 
@@ -305,7 +310,7 @@ impl Instruction {
         unimplemented!();
     }
 
-    fn mv_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn mv_register(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[register1] = registers.v[register2];
         registers.inc_pc(2);
@@ -316,7 +321,7 @@ impl Instruction {
         format!("mv v{:x} v{:x}", register1, register2)
     }
 
-    fn or_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn or_register(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[register1] |= registers.v[register2];
         registers.inc_pc(2);
@@ -327,7 +332,7 @@ impl Instruction {
         format!("or v{:x} v{:x}", register1, register2)
     }
 
-    fn and_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn and_register(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[register1] &= registers.v[register2];
         registers.inc_pc(2);
@@ -338,7 +343,7 @@ impl Instruction {
         format!("and v{:x} v{:x}", register1, register2)
     }
 
-    fn xor_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn xor_register(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[register1] ^= registers.v[register2];
         registers.inc_pc(2);
@@ -349,7 +354,7 @@ impl Instruction {
         format!("xor v{:x} v{:x}", register1, register2)
     }
 
-    fn add_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn add_register(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         let result = registers.v[register1] + registers.v[register2];
 
@@ -367,7 +372,7 @@ impl Instruction {
         format!("add v{:x} v{:x}", register1, register2)
     }
 
-    fn sub_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn sub_register(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         let result = registers.v[register1] - registers.v[register2];
 
@@ -385,7 +390,7 @@ impl Instruction {
         format!("sub v{:x} v{:x}", register1, register2)
     }
 
-    fn shr_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn shr_register(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[0xF].0 = registers.v[register1].0 & 0x1;
         registers.v[register1].0 >>= 1;
@@ -397,7 +402,7 @@ impl Instruction {
         format!("shr v{:x}", register1)
     }
 
-    fn rev_sub_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn rev_sub_register(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         let result = registers.v[register2] - registers.v[register1];
 
@@ -410,7 +415,7 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn shl_register(registers: &mut Registers, memory: &mut Memory, data: u16) {
+    fn shl_register(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[0xF].0 = registers.v[register1].0 & (0x1 << 7);
         registers.v[register1].0 <<= 1;
@@ -428,6 +433,7 @@ impl Instruction {
     }
 
     pub fn math_op_table() -> [Self; 9] {
+
         let mv = Self {
             desc: format!("mv X Y"),
             execute: Self::mv_register,
@@ -589,7 +595,7 @@ impl Instruction {
 
 pub struct Cpu {
     pub registers: Registers,
-    pub main_op_table: [Instruction; 16],
+    pub op_tables: OpTables,
 }
 
 impl Cpu {
@@ -605,7 +611,10 @@ impl Cpu {
                 sound: Wrapping(0),
                 rng: rand::thread_rng(),
             },
-            main_op_table: Instruction::main_op_table(),
+            op_tables: OpTables {
+                main_op_table: Instruction::main_op_table(),
+                math_op_table: Instruction::math_op_table(),
+            }
         }
     }
 
@@ -613,7 +622,7 @@ impl Cpu {
         let next_opcode = memory.get16(self.registers.pc.0 as usize).0;
         let op_id = ((next_opcode & 0xF000) >> 12) as usize;
         trace!("ID: {:x} DATA: {:x}", op_id, next_opcode & 0x0FFF);
-        (self.main_op_table[op_id].execute)(&mut self.registers, memory, next_opcode & 0x0FFF); 
+        (self.op_tables.main_op_table[op_id].execute)(&mut self.registers, memory, next_opcode & 0x0FFF, &self.op_tables);
     }
 }
 
