@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use crate::memory::Memory;
 use log::{info, trace};
 use rand::prelude::*;
@@ -76,6 +77,7 @@ impl Registers {
     }
 }
 
+#[derive(Clone)]
 pub struct Instruction {
     /// Rough description of the opcode from the first byte
     pub desc: String,
@@ -553,6 +555,87 @@ impl Instruction {
     fn rev_sub_register_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, register2) = Self::two_registers_from_data(data);
         format!("rsub v{:x} v{:x}", register1, register2)
+    }
+
+    fn invalid_op(
+        _registers: &mut Registers,
+        _memory: &mut Memory,
+        _data: u16,
+        _op_tables: &OpTables,
+    ) {
+       panic!("invalid");
+    }
+
+    fn invalid_op_to_string(_data: u16, _op_table: &OpTables) -> String {
+        format!("invalid")
+    }
+
+    fn get_delay(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        registers.v[register1] = registers.delay;
+    }
+
+    fn get_delay_to_string(data: u16, _op_table: &OpTables) -> String {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        format!("V{} = get_delay()", register1)
+    }
+
+    fn wait_for_key(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
+        unimplemented!("wait for key");
+    }
+
+    fn wait_for_key_to_string(data: u16, _op_table: &OpTables) -> String {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        format!("V{} = wait_key ()", register1)
+    }
+
+    fn add_vx_i(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        registers.i += Wrapping(registers.v[register1].0 as u16);
+    }
+
+    fn add_vx_i_to_string(data: u16, _op_table: &OpTables) -> String {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        format!("add I, V{}", register1)
+    }
+
+    fn set_i_sprite_addr(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        unimplemented!("set i sprite addr");
+    }
+
+    fn set_i_sprite_addr_to_string(data: u16, _op_table: &OpTables) -> String {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        format!("mv I, sprite_addr(V{})", register1)
+    }
+
+    pub fn load_op_table() -> [Self; 0x66] {
+        let mut load_op_table: [Self; 0x66] = (0..0x66).map(|_x| { Self {
+            desc: format!("invalid"),
+            execute: Self::invalid_op,
+            to_string: Self::invalid_op_to_string,
+        }}).collect::<Vec<Self>>().try_into().unwrap_or_else(|_v| panic!("load table wrong length"));
+        load_op_table
     }
 
     pub fn math_op_table() -> [Self; 9] {
