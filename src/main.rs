@@ -1,6 +1,6 @@
+mod cpu;
 mod machine;
 mod memory;
-mod cpu;
 
 use machine::Machine;
 

@@ -1,7 +1,7 @@
-use rand::prelude::*;
-use log::{info, trace};
-use std::num::Wrapping;
 use crate::memory::Memory;
+use log::{info, trace};
+use rand::prelude::*;
+use std::num::Wrapping;
 
 /// Size of an instruction (CHIP-8 uses fixed width opcodes)
 pub const INSTRUCTION_SIZE: u16 = 0x2;
@@ -21,29 +21,28 @@ pub const NIBBLE_DATA_MASK: u16 = 0x000F;
 
 #[derive(Debug)]
 pub struct Registers {
+    /// The CHIP architecture has 16 8-bit general purpose registers.
+    /// Register v[f] also doubles as the carry flag, collision flag, or borrow flag dependent on
+    /// the operation.
+    pub v: [Wrapping<u8>; 16],
+    /// The program counter
+    pub pc: Wrapping<u16>,
+    /// The address register
+    pub i: Wrapping<u16>,
 
-  /// The CHIP architecture has 16 8-bit general purpose registers.
-  /// Register v[f] also doubles as the carry flag, collision flag, or borrow flag dependent on
-  /// the operation.
-  pub v: [Wrapping<u8>; 16],
-  /// The program counter
-  pub pc: Wrapping<u16>,
-  /// The address register
-  pub i: Wrapping<u16>,
+    /// The stack is only used for return
+    pub stack: [Wrapping<u8>; 256],
+    pub stack_idx: usize,
 
-  /// The stack is only used for return
-  pub stack: [Wrapping<u8>; 256],
-  pub stack_idx: usize,
+    /// The delay timer counts down to zero at 60hz
+    pub delay: Wrapping<u8>,
 
-  /// The delay timer counts down to zero at 60hz
-  pub delay: Wrapping<u8>,
+    /// The sound timer emits a sound if it is not zero.
+    /// This timer counts down to zero at 60hz and then stops.
+    pub sound: Wrapping<u8>,
 
-  /// The sound timer emits a sound if it is not zero.
-  /// This timer counts down to zero at 60hz and then stops.
-  pub sound: Wrapping<u8>,
-
-  /// Used to generate random values for the masked random command
-  pub rng: ThreadRng,
+    /// Used to generate random values for the masked random command
+    pub rng: ThreadRng,
 }
 
 pub struct OpTables {
@@ -52,7 +51,6 @@ pub struct OpTables {
 }
 
 impl Registers {
-
     /// Increment the PC by a given amount
     pub fn inc_pc(&mut self, val: u16) {
         self.pc += Wrapping(val);
@@ -82,34 +80,39 @@ pub struct Instruction {
     /// Rough description of the opcode from the first byte
     pub desc: String,
     /// Execute the opcode, with the change in state being reflected in registers and memory
-    pub execute: fn(registers: &mut Registers, memory: &mut Memory, data: u16, op_tables: &OpTables),
+    pub execute:
+        fn(registers: &mut Registers, memory: &mut Memory, data: u16, op_tables: &OpTables),
     /// Granular description of the opcode that requires the opcode data (not just the first byte)
     pub to_string: fn(data: u16, op_tables: &OpTables) -> String,
 }
 
 impl Instruction {
-
     /// The zero opcode can be either clear display, ret, or machine call (Call an instruction
     /// written in machine code) depending on parameters. We merge these all into one opcode
     /// execution.
-    fn mcall_display_or_flow(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn mcall_display_or_flow(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         match data {
             0xE0 => unimplemented!("clear display"),
             0xEE => {
                 trace!("ret");
                 let new_pc = registers.stack_pop16();
                 registers.pc = Wrapping(new_pc);
-            },
+            }
             _ => panic!("machine code routes are unsupported"),
         }
     }
 
     fn mcall_display_or_flow_to_string(data: u16, _op_table: &OpTables) -> String {
-       match data {
-           0xE0 => format!("clear_display"),
-           0xEE => format!("return"),
-           _ => format!("mcall {:x}", data),
-       }
+        match data {
+            0xE0 => format!("clear_display"),
+            0xEE => format!("return"),
+            _ => format!("mcall {:x}", data),
+        }
     }
 
     /// Goto changes the PC pointer to the fixed location
@@ -138,7 +141,7 @@ impl Instruction {
 
     /// Extract the register from the opcode when the instruction has the form _R__
     fn register_from_data(data: u16) -> u8 {
-         ((data & REGISTER_MASK) >> 8) as u8
+        ((data & REGISTER_MASK) >> 8) as u8
     }
 
     /// Extract the register from the opcode when the register has the form __R_
@@ -153,24 +156,34 @@ impl Instruction {
 
     /// Extract both the register and immediate for instructions in the form _RII
     fn register_and_immediate_from_data(data: u16) -> (usize, u8) {
-        (Self::register_from_data(data) as usize, Self::immediate_from_data(data))
+        (
+            Self::register_from_data(data) as usize,
+            Self::immediate_from_data(data),
+        )
     }
 
     /// Extract two registers from and opcode in the form _RV_
     fn two_registers_from_data(data: u16) -> (usize, usize) {
-        (Self::register_from_data(data) as usize, Self::register_two_from_data(data) as usize)
+        (
+            Self::register_from_data(data) as usize,
+            Self::register_two_from_data(data) as usize,
+        )
     }
 
     /// Checks if a register and an immediate value are equal. If they are equal then we
     /// skip the next instruction, otherwise we run the next instruction.
-    fn reg_equal(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn reg_equal(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         trace!("eq v{:x} {:x}", register, data);
-        registers.inc_pc(
-        if registers.v[register as usize] == Wrapping(data) {
-           4
+        registers.inc_pc(if registers.v[register as usize] == Wrapping(data) {
+            4
         } else {
-           2
+            2
         });
     }
 
@@ -181,13 +194,17 @@ impl Instruction {
 
     /// Checks if a register and an immediate are not equal. If they are not equal then skip the
     /// next instruction, otherwise run the next instruction.
-    fn reg_not_equal(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn reg_not_equal(
+        registers: &mut Registers,
+        memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register, data) = Self::register_and_immediate_from_data(data);
-        registers.inc_pc(
-        if registers.v[register as usize] != Wrapping(data) {
-           4
+        registers.inc_pc(if registers.v[register as usize] != Wrapping(data) {
+            4
         } else {
-           2
+            2
         });
     }
 
@@ -198,10 +215,19 @@ impl Instruction {
 
     /// Checks if two registers are equal. If they are then skip the next instruction, otherwise
     /// run it.
-    fn two_reg_equal(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn two_reg_equal(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, register2) = Self::two_registers_from_data(data);
         trace!("eq v{:x} v{:x}", register1, register2);
-        registers.inc_pc(if registers.v[register1] == registers.v[register2] { 4 } else { 2 });
+        registers.inc_pc(if registers.v[register1] == registers.v[register2] {
+            4
+        } else {
+            2
+        });
     }
 
     fn two_reg_equal_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -210,7 +236,12 @@ impl Instruction {
     }
 
     /// Load an immediate into a register
-    fn load_immediate(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn load_immediate(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.v[register] = Wrapping(data);
         registers.inc_pc(2);
@@ -222,7 +253,12 @@ impl Instruction {
     }
 
     /// Same as load immediate but add it to the register rather than add
-    fn add_immediate(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn add_immediate(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register, data) = Self::register_and_immediate_from_data(data);
         registers.v[register] = registers.v[register] + Wrapping(data);
         registers.inc_pc(2);
@@ -233,7 +269,12 @@ impl Instruction {
         format!("add v{} {}", register, data)
     }
 
-    fn math_or_bitop(registers: &mut Registers, memory: &mut Memory, data: u16, op_tables: &OpTables) {
+    fn math_or_bitop(
+        registers: &mut Registers,
+        memory: &mut Memory,
+        data: u16,
+        op_tables: &OpTables,
+    ) {
         let math_opcode = data & 0x000F;
         (op_tables.math_op_table[math_opcode as usize].execute)(registers, memory, data, op_tables);
     }
@@ -243,9 +284,18 @@ impl Instruction {
         (op_table.math_op_table[math_opcode as usize].to_string)(data, op_table)
     }
 
-    fn two_registers_not_equal(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn two_registers_not_equal(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, register2) = Self::two_registers_from_data(data);
-        registers.inc_pc(if registers.v[register1] != registers.v[register2] { 4 } else { 2 });
+        registers.inc_pc(if registers.v[register1] != registers.v[register2] {
+            4
+        } else {
+            2
+        });
     }
 
     fn two_registers_not_equal_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -263,7 +313,12 @@ impl Instruction {
         format!("ld i {:x}", data)
     }
 
-    fn jump_immediate_plus_register(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn jump_immediate_plus_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         registers.pc = Wrapping(registers.v[0].0 as u16) + Wrapping(data);
     }
 
@@ -273,7 +328,12 @@ impl Instruction {
 
     /// The masked random instruction generates a random value between 0 and 255, masks it with an
     /// immediate (& imm) and then places it in a specified register.
-    fn masked_random(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn masked_random(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         println!("TODO: Rand");
         let (register, mask) = Self::register_and_immediate_from_data(data);
         let rval: u8 = registers.rng.gen::<u8>();
@@ -286,7 +346,12 @@ impl Instruction {
         format!("rand v{} {}", register, mask)
     }
 
-    fn draw_sprite(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn draw_sprite(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         unimplemented!();
     }
 
@@ -304,7 +369,12 @@ impl Instruction {
         unimplemented!();
     }
 
-    fn load_or_store(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn load_or_store(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         unimplemented!();
     }
 
@@ -312,7 +382,12 @@ impl Instruction {
         unimplemented!();
     }
 
-    fn mv_register(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn mv_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[register1] = registers.v[register2];
         registers.inc_pc(2);
@@ -323,7 +398,12 @@ impl Instruction {
         format!("mv v{:x} v{:x}", register1, register2)
     }
 
-    fn or_register(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn or_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[register1] |= registers.v[register2];
         registers.inc_pc(2);
@@ -334,7 +414,12 @@ impl Instruction {
         format!("or v{:x} v{:x}", register1, register2)
     }
 
-    fn and_register(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn and_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[register1] &= registers.v[register2];
         registers.inc_pc(2);
@@ -345,7 +430,12 @@ impl Instruction {
         format!("and v{:x} v{:x}", register1, register2)
     }
 
-    fn xor_register(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn xor_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[register1] ^= registers.v[register2];
         registers.inc_pc(2);
@@ -356,13 +446,20 @@ impl Instruction {
         format!("xor v{:x} v{:x}", register1, register2)
     }
 
-    fn add_register(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn add_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, register2) = Self::two_registers_from_data(data);
         let result = registers.v[register1] + registers.v[register2];
 
-        if result < registers.v[register1] {
-            registers.v[0xF] = Wrapping(1);
-        }
+        registers.v[0xF] = if result < registers.v[register1] {
+            Wrapping(1)
+        } else {
+            Wrapping(0)
+        };
 
         registers.v[register1] = result;
 
@@ -374,13 +471,20 @@ impl Instruction {
         format!("add v{:x} v{:x}", register1, register2)
     }
 
-    fn sub_register(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn sub_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, register2) = Self::two_registers_from_data(data);
         let result = registers.v[register1] - registers.v[register2];
 
-        if result > registers.v[register1] {
-            registers.v[0xF] = Wrapping(1);
-        }
+        registers.v[0xF] = if result > registers.v[register1] {
+            Wrapping(1)
+        } else {
+            Wrapping(0)
+        };
 
         registers.v[register1] = result;
 
@@ -392,7 +496,12 @@ impl Instruction {
         format!("sub v{:x} v{:x}", register1, register2)
     }
 
-    fn shr_register(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn shr_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, register2) = Self::two_registers_from_data(data);
         registers.v[0xF].0 = registers.v[register1].0 & 0x1;
         registers.v[register1].0 >>= 1;
@@ -404,7 +513,12 @@ impl Instruction {
         format!("shr v{:x}", register1)
     }
 
-    fn rev_sub_register(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn rev_sub_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, register2) = Self::two_registers_from_data(data);
         let result = registers.v[register2] - registers.v[register1];
 
@@ -417,7 +531,12 @@ impl Instruction {
         registers.inc_pc(2);
     }
 
-    fn shl_register(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn shl_register(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
         let (register1, _register2) = Self::two_registers_from_data(data);
         registers.v[0xF].0 = registers.v[register1].0 & (0x1 << 7);
         registers.v[register1].0 <<= 1;
@@ -435,7 +554,6 @@ impl Instruction {
     }
 
     pub fn math_op_table() -> [Self; 9] {
-
         let mv = Self {
             desc: format!("mv X Y"),
             execute: Self::mv_register,
@@ -451,7 +569,7 @@ impl Instruction {
         let and = Self {
             desc: format!("xor X Y"),
             execute: Self::and_register,
-            to_string: Self::and_register_to_string
+            to_string: Self::and_register_to_string,
         };
 
         let xor = Self {
@@ -494,11 +612,10 @@ impl Instruction {
     }
 
     pub fn main_op_table() -> [Self; 16] {
-
         let mcall_instruction = Self {
             desc: format!("call XXX"),
             execute: Self::mcall_display_or_flow,
-            to_string: Self::mcall_display_or_flow_to_string
+            to_string: Self::mcall_display_or_flow_to_string,
         };
 
         let goto_instruction = Self {
@@ -591,7 +708,24 @@ impl Instruction {
             to_string: Self::load_or_store_to_string,
         };
 
-        [mcall_instruction, goto_instruction, call_instruction, reg_eq, reg_neq, two_reg_eq, load_immediate, add_immediate, math_or_bitop, two_reg_not_equal, set_i, jump_imm_plus_register, masked_random, draw_sprite, key_op, load_or_store]
+        [
+            mcall_instruction,
+            goto_instruction,
+            call_instruction,
+            reg_eq,
+            reg_neq,
+            two_reg_eq,
+            load_immediate,
+            add_immediate,
+            math_or_bitop,
+            two_reg_not_equal,
+            set_i,
+            jump_imm_plus_register,
+            masked_random,
+            draw_sprite,
+            key_op,
+            load_or_store,
+        ]
     }
 }
 
@@ -616,7 +750,7 @@ impl Cpu {
             op_tables: OpTables {
                 main_op_table: Instruction::main_op_table(),
                 math_op_table: Instruction::math_op_table(),
-            }
+            },
         }
     }
 
@@ -624,20 +758,25 @@ impl Cpu {
         let next_opcode = memory.get16(self.registers.pc.0 as usize).0;
         let op_id = ((next_opcode & 0xF000) >> 12) as usize;
         trace!("ID: {:x} DATA: {:x}", op_id, next_opcode & 0x0FFF);
-        (self.op_tables.main_op_table[op_id].execute)(&mut self.registers, memory, next_opcode & 0x0FFF, &self.op_tables);
+        (self.op_tables.main_op_table[op_id].execute)(
+            &mut self.registers,
+            memory,
+            next_opcode & 0x0FFF,
+            &self.op_tables,
+        );
     }
 }
 
 #[cfg(test)]
 mod instruction_tests {
-    use log::info;
     use crate::cpu::Cpu;
     use crate::cpu::Memory;
+    use log::info;
     use std::num::Wrapping;
 
-	#[ctor::ctor]
-	fn init() {
-		let _ = env_logger::builder().is_test(true).try_init();
+    #[ctor::ctor]
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
     }
 
     fn prepare_cpu() -> Cpu {
@@ -711,6 +850,14 @@ mod instruction_tests {
         math_bitop_core(data, dst, src, 3);
     }
 
+    fn assemble_reg_add(data: &mut [u8], dst: u8, src: u8) {
+        math_bitop_core(data, dst, src, 4);
+    }
+
+    fn assemble_reg_sub(data: &mut [u8], dst: u8, src: u8) {
+        math_bitop_core(data, dst, src, 5);
+    }
+
     fn assemble_set_i(data: &mut [u8], dst: u16) {
         data[0] = (0xA << 4) | (((dst >> 8) & 0x0F) as u8);
         data[1] = (dst & 0xFF) as u8;
@@ -723,72 +870,140 @@ mod instruction_tests {
 
     #[test]
     fn mv() {
-		let mut program = [0; 256];
-		assemble_reg_mv(&mut program, 0x2, 0x4);
-		let mut memory = Memory::of_bytes(&program);
-		let mut cpu = prepare_cpu();
+        let mut program = [0; 256];
+        assemble_reg_mv(&mut program, 0x2, 0x4);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
         cpu.registers.v[0x4].0 = 40;
         cpu.step(&mut memory);
-		info!("{:?}", cpu.registers);
+        info!("{:?}", cpu.registers);
         assert_eq!(cpu.registers.v[0x2].0, 40);
         assert_eq!(cpu.registers.v[0x4].0, 40);
-		assert_eq!(cpu.registers.pc.0, 0x002);
+        assert_eq!(cpu.registers.pc.0, 0x002);
     }
 
     #[test]
     fn or() {
-		let mut program = [0; 256];
-		assemble_reg_or(&mut program, 0x2, 0x4);
-		let mut memory = Memory::of_bytes(&program);
-		let mut cpu = prepare_cpu();
+        let mut program = [0; 256];
+        assemble_reg_or(&mut program, 0x2, 0x4);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.registers.v[0x4].0 = 40;
         cpu.step(&mut memory);
-		info!("{:?}", cpu.registers);
+        info!("{:?}", cpu.registers);
         assert_eq!(cpu.registers.v[0x2].0, 40 | 64);
         assert_eq!(cpu.registers.v[0x4].0, 40);
-		assert_eq!(cpu.registers.pc.0, 0x002);
+        assert_eq!(cpu.registers.pc.0, 0x002);
     }
 
     #[test]
     fn and() {
-		let mut program = [0; 256];
-		assemble_reg_and(&mut program, 0x2, 0x4);
-		let mut memory = Memory::of_bytes(&program);
-		let mut cpu = prepare_cpu();
+        let mut program = [0; 256];
+        assemble_reg_and(&mut program, 0x2, 0x4);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.registers.v[0x4].0 = 40;
         cpu.step(&mut memory);
-		info!("{:?}", cpu.registers);
-        assert_eq!(cpu.registers.v[0x2].0, 40 &64);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2].0, 40 & 64);
         assert_eq!(cpu.registers.v[0x4].0, 40);
-		assert_eq!(cpu.registers.pc.0, 0x002);
+        assert_eq!(cpu.registers.pc.0, 0x002);
     }
 
     #[test]
     fn xor() {
-		let mut program = [0; 256];
-		assemble_reg_xor(&mut program, 0x2, 0x4);
-		let mut memory = Memory::of_bytes(&program);
-		let mut cpu = prepare_cpu();
+        let mut program = [0; 256];
+        assemble_reg_xor(&mut program, 0x2, 0x4);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.registers.v[0x4].0 = 40;
         cpu.step(&mut memory);
-		info!("{:?}", cpu.registers);
+        info!("{:?}", cpu.registers);
         assert_eq!(cpu.registers.v[0x2].0, 40 ^ 64);
         assert_eq!(cpu.registers.v[0x4].0, 40);
-		assert_eq!(cpu.registers.pc.0, 0x002);
+        assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
+    fn add_reg() {
+        let mut program = [0; 256];
+        assemble_reg_add(&mut program, 0x2, 0x4);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 64;
+        cpu.registers.v[0x4].0 = 40;
+        cpu.registers.v[0xF].0 = 40;
+        cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2].0, 40 + 64);
+        assert_eq!(cpu.registers.v[0x4].0, 40);
+        assert_eq!(cpu.registers.v[0xF].0, 0);
+        assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
+    fn add_reg_carry() {
+        let mut program = [0; 256];
+        assemble_reg_add(&mut program, 0x2, 0x4);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 128;
+        cpu.registers.v[0x4].0 = 128;
+        cpu.registers.v[0xF].0 = 40;
+        cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2], Wrapping(128_u8) + Wrapping(128_u8));
+        assert_eq!(cpu.registers.v[0x4].0, 128);
+        assert_eq!(cpu.registers.v[0xF].0, 1);
+        assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
+    fn sub_reg() {
+        let mut program = [0; 256];
+        assemble_reg_sub(&mut program, 0x2, 0x4);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 64;
+        cpu.registers.v[0x4].0 = 40;
+        cpu.registers.v[0xF].0 = 40;
+        cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2].0, 64 - 40);
+        assert_eq!(cpu.registers.v[0x4].0, 40);
+        assert_eq!(cpu.registers.v[0xF].0, 0);
+        assert_eq!(cpu.registers.pc.0, 0x002);
+    }
+
+    #[test]
+    fn sub_reg_carry() {
+        let mut program = [0; 256];
+        assemble_reg_sub(&mut program, 0x2, 0x4);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x2].0 = 64;
+        cpu.registers.v[0x4].0 = 128;
+        cpu.registers.v[0xF].0 = 40;
+        cpu.step(&mut memory);
+        info!("{:?}", cpu.registers);
+        assert_eq!(cpu.registers.v[0x2], Wrapping(64_u8) + Wrapping(128_u8));
+        assert_eq!(cpu.registers.v[0x4].0, 128);
+        assert_eq!(cpu.registers.v[0xF].0, 1);
+        assert_eq!(cpu.registers.pc.0, 0x002);
     }
 
     #[test]
     fn goto() {
-		let mut program = [0; 256];
-		assemble_goto(&mut program, 0xAF);
-		let mut memory = Memory::of_bytes(&program);
-		let mut cpu = prepare_cpu();
+        let mut program = [0; 256];
+        assemble_goto(&mut program, 0xAF);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
         cpu.step(&mut memory);
-		info!("{:?}", cpu.registers);
-		assert!(cpu.registers.pc == Wrapping(0x00AF));
+        info!("{:?}", cpu.registers);
+        assert!(cpu.registers.pc == Wrapping(0x00AF));
     }
 
     #[test]
@@ -826,7 +1041,6 @@ mod instruction_tests {
 
         cpu.step(&mut memory);
         assert_eq!(cpu.registers.pc.0, 0x02);
-
     }
 
     #[test]
@@ -880,7 +1094,6 @@ mod instruction_tests {
         cpu.step(&mut memory);
         assert_eq!(cpu.registers.pc.0, 2);
     }
-
 
     #[test]
     fn load_imm() {

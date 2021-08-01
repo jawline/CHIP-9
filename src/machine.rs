@@ -9,8 +9,8 @@ pub struct Machine {
 impl Machine {
     pub fn new() -> Self {
         Self {
-          cpu: Cpu::new(),
-          memory: Memory::new()
+            cpu: Cpu::new(),
+            memory: Memory::new(),
         }
     }
 }
