@@ -1,7 +1,7 @@
-use std::convert::TryInto;
 use crate::memory::Memory;
 use log::{info, trace};
 use rand::prelude::*;
+use std::convert::TryInto;
 use std::num::Wrapping;
 
 /// Size of an instruction (CHIP-8 uses fixed width opcodes)
@@ -563,7 +563,7 @@ impl Instruction {
         _data: u16,
         _op_tables: &OpTables,
     ) {
-       panic!("invalid");
+        panic!("invalid");
     }
 
     fn invalid_op_to_string(_data: u16, _op_table: &OpTables) -> String {
@@ -599,12 +599,7 @@ impl Instruction {
         format!("V{} = wait_key ()", register1)
     }
 
-    fn add_vx_i(
-        registers: &mut Registers,
-        _memory: &mut Memory,
-        data: u16,
-        _op_tables: &OpTables,
-    ) {
+    fn add_vx_i(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, _register2) = Self::two_registers_from_data(data);
         registers.i += Wrapping(registers.v[register1].0 as u16);
     }
@@ -630,11 +625,15 @@ impl Instruction {
     }
 
     pub fn load_op_table() -> [Self; 0x66] {
-        let mut load_op_table: [Self; 0x66] = (0..0x66).map(|_x| { Self {
-            desc: format!("invalid"),
-            execute: Self::invalid_op,
-            to_string: Self::invalid_op_to_string,
-        }}).collect::<Vec<Self>>().try_into().unwrap_or_else(|_v| panic!("load table wrong length"));
+        let mut load_op_table: [Self; 0x66] = (0..0x66)
+            .map(|_x| Self {
+                desc: format!("invalid"),
+                execute: Self::invalid_op,
+                to_string: Self::invalid_op_to_string,
+            })
+            .collect::<Vec<Self>>()
+            .try_into()
+            .unwrap_or_else(|_v| panic!("load table wrong length"));
         load_op_table
     }
 
