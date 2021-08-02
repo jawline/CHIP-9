@@ -634,9 +634,12 @@ impl Instruction {
         format!("bcd v{}", register1)
     }
 
-    fn reg_dump(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
-        let (register1, _register2) = Self::two_registers_from_data(data);
-        unimplemented!("reg_dump vx");
+    fn reg_dump(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+        let (register1, _) = Self::two_registers_from_data(data);
+        for i in 0..(register1 as usize + 1) {
+            memory.set(registers.i.0 as usize, registers.v[i]);
+            registers.i += Wrapping(1);
+        }
     }
 
     fn reg_dump_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -644,9 +647,12 @@ impl Instruction {
         format!("reg_dump v0, v{}", register1)
     }
 
-    fn reg_load(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
-        let (register1, _register2) = Self::two_registers_from_data(data);
-        unimplemented!("reg_load vx");
+    fn reg_load(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+        let (register1, _) = Self::two_registers_from_data(data);
+        for i in 0..(register1 as usize + 1) {
+            registers.v[i] = memory.get(registers.i.0 as usize);
+            registers.i += Wrapping(1);
+        }
     }
 
     fn reg_load_to_string(data: u16, _op_table: &OpTables) -> String {
