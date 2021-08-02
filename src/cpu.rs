@@ -578,11 +578,44 @@ impl Instruction {
     ) {
         let (register1, _register2) = Self::two_registers_from_data(data);
         registers.v[register1] = registers.delay;
+        registers.inc_pc(2);
     }
 
     fn get_delay_to_string(data: u16, _op_table: &OpTables) -> String {
         let (register1, _register2) = Self::two_registers_from_data(data);
         format!("V{} = get_delay()", register1)
+    }
+
+    fn set_delay(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        registers.delay = registers.v[register1];
+        registers.inc_pc(2);
+    }
+
+    fn set_delay_to_string(data: u16, _op_table: &OpTables) -> String {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        format!("mv delay, V{}", register1)
+    }
+
+    fn set_sound(
+        registers: &mut Registers,
+        _memory: &mut Memory,
+        data: u16,
+        _op_tables: &OpTables,
+    ) {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        registers.sound = registers.v[register1];
+        registers.inc_pc(2);
+    }
+
+    fn set_sound_to_string(data: u16, _op_table: &OpTables) -> String {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        format!("mv sound, V{}", register1)
     }
 
     fn wait_for_key(
@@ -602,6 +635,7 @@ impl Instruction {
     fn add_vx_i(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
         let (register1, _register2) = Self::two_registers_from_data(data);
         registers.i += Wrapping(registers.v[register1].0 as u16);
+        registers.inc_pc(2);
     }
 
     fn add_vx_i_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -624,9 +658,22 @@ impl Instruction {
         format!("mv I, sprite_addr(V{})", register1)
     }
 
-    fn bcd_vx(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
-        let (register1, _register2) = Self::two_registers_from_data(data);
-        unimplemented!("bcd vx");
+    fn bcd_vx(registers: &mut Registers, memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+        let (register1, _) = Self::two_registers_from_data(data);
+        let mut tmp = registers.v[register1];
+
+        // Least significant digit
+        memory.set(registers.i.0 as usize + 2, tmp % Wrapping(10));
+        tmp /= Wrapping(10);
+
+        // Middle digit
+        memory.set(registers.i.0 as usize + 1, tmp % Wrapping(10));
+        tmp /= Wrapping(10);
+
+        // Most significant digit
+        memory.set(registers.i.0 as usize, tmp % Wrapping(10));
+
+        registers.inc_pc(2);
     }
 
     fn bcd_vx_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -640,6 +687,7 @@ impl Instruction {
             memory.set(registers.i.0 as usize, registers.v[i]);
             registers.i += Wrapping(1);
         }
+        registers.inc_pc(2);
     }
 
     fn reg_dump_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -653,6 +701,7 @@ impl Instruction {
             registers.v[i] = memory.get(registers.i.0 as usize);
             registers.i += Wrapping(1);
         }
+        registers.inc_pc(2);
     }
 
     fn reg_load_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -670,6 +719,61 @@ impl Instruction {
             .collect::<Vec<Self>>()
             .try_into()
             .unwrap_or_else(|_v| panic!("load table wrong length"));
+
+        load_op_table[0x07] = Self {
+            desc: format!("mv Vx, delay"),
+            execute: Self::get_delay,
+            to_string: Self::get_delay_to_string,
+        };
+
+        load_op_table[0x0A] = Self {
+            desc: format!("mv Vx, key"),
+            execute: Self::wait_for_key,
+            to_string: Self::wait_for_key_to_string,
+        };
+
+        load_op_table[0x15] = Self {
+            desc: format!("mv delay, Vx"),
+            execute: Self::set_delay,
+            to_string: Self::set_delay_to_string,
+        };
+
+        load_op_table[0x18] = Self {
+            desc: format!("mv sound, Vx"),
+            execute: Self::set_sound,
+            to_string: Self::set_sound_to_string,
+        };
+
+        load_op_table[0x1E] = Self {
+            desc: format!("add I, Vx"),
+            execute: Self::add_vx_i,
+            to_string: Self::add_vx_i_to_string,
+        };
+
+        load_op_table[0x29] = Self {
+            desc: format!("mv I, sprite_addr[Vx]"),
+            execute: Self::set_i_sprite_addr,
+            to_string: Self::set_i_sprite_addr_to_string,
+        };
+
+        load_op_table[0x33] = Self {
+            desc: format!("mv I, bcd Vx"),
+            execute: Self::bcd_vx,
+            to_string: Self::bcd_vx_to_string,
+        };
+
+        load_op_table[0x55] = Self {
+            desc: format!("red_dump"),
+            execute: Self::reg_dump,
+            to_string: Self::reg_dump_to_string,
+        };
+
+        load_op_table[0x65] = Self {
+            desc: format!("reg_load"),
+            execute: Self::reg_load,
+            to_string: Self::reg_load_to_string,
+        };
+
         load_op_table
     }
 
