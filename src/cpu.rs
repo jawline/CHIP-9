@@ -49,6 +49,7 @@ pub struct Registers {
 pub struct OpTables {
     pub main_op_table: [Instruction; 16],
     pub math_op_table: [Instruction; 9],
+    pub load_op_table: [Instruction; 0x66],
 }
 
 impl Registers {
@@ -373,15 +374,17 @@ impl Instruction {
 
     fn load_or_store(
         registers: &mut Registers,
-        _memory: &mut Memory,
+        memory: &mut Memory,
         data: u16,
-        _op_tables: &OpTables,
+        op_tables: &OpTables,
     ) {
-        unimplemented!();
+        let opcode_mask = data & 0x00FF;
+        (op_tables.load_op_table[opcode_mask as usize].execute)(registers, memory, data, op_tables);
     }
 
-    fn load_or_store_to_string(data: u16, _op_table: &OpTables) -> String {
-        unimplemented!();
+    fn load_or_store_to_string(data: u16, op_tables: &OpTables) -> String {
+        let opcode_mask = data & 0x00FF;
+        (op_tables.load_op_table[opcode_mask as usize].to_string)(data, op_tables)
     }
 
     fn mv_register(
@@ -974,6 +977,7 @@ impl Cpu {
             op_tables: OpTables {
                 main_op_table: Instruction::main_op_table(),
                 math_op_table: Instruction::math_op_table(),
+                load_op_table: Instruction::load_op_table(),
             },
         }
     }
