@@ -1,5 +1,5 @@
 use crate::memory::Memory;
-use log::{info, trace};
+use log::trace;
 use rand::prelude::*;
 use std::convert::TryInto;
 use std::num::Wrapping;
@@ -199,7 +199,7 @@ impl Instruction {
     /// next instruction, otherwise run the next instruction.
     fn reg_not_equal(
         registers: &mut Registers,
-        memory: &mut Memory,
+        _memory: &mut Memory,
         data: u16,
         _op_tables: &OpTables,
     ) {
@@ -350,9 +350,9 @@ impl Instruction {
     }
 
     fn draw_sprite(
-        registers: &mut Registers,
+        _registers: &mut Registers,
         _memory: &mut Memory,
-        data: u16,
+        _data: u16,
         _op_tables: &OpTables,
     ) {
         unimplemented!();
@@ -364,11 +364,11 @@ impl Instruction {
         format!("draw v{} v{} {}", register1, register2, imm)
     }
 
-    fn key_op(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+    fn key_op(_registers: &mut Registers, _memory: &mut Memory, _data: u16, _op_tables: &OpTables) {
         unimplemented!();
     }
 
-    fn key_op_to_string(data: u16, _op_table: &OpTables) -> String {
+    fn key_op_to_string(_data: u16, _op_table: &OpTables) -> String {
         unimplemented!();
     }
 
@@ -507,7 +507,7 @@ impl Instruction {
         data: u16,
         _op_tables: &OpTables,
     ) {
-        let (register1, register2) = Self::two_registers_from_data(data);
+        let (register1, _register2) = Self::two_registers_from_data(data);
         registers.v[0xF].0 = registers.v[register1].0 & 0x1;
         registers.v[register1].0 >>= 1;
         registers.inc_pc(2);
@@ -622,9 +622,9 @@ impl Instruction {
     }
 
     fn wait_for_key(
-        registers: &mut Registers,
+        _registers: &mut Registers,
         _memory: &mut Memory,
-        data: u16,
+        _data: u16,
         _op_tables: &OpTables,
     ) {
         unimplemented!("wait for key");
@@ -647,12 +647,12 @@ impl Instruction {
     }
 
     fn set_i_sprite_addr(
-        registers: &mut Registers,
+        _registers: &mut Registers,
         _memory: &mut Memory,
         data: u16,
         _op_tables: &OpTables,
     ) {
-        let (register1, _register2) = Self::two_registers_from_data(data);
+        let (_register1, _register2) = Self::two_registers_from_data(data);
         unimplemented!("set i sprite addr");
     }
 
@@ -666,16 +666,17 @@ impl Instruction {
         let mut tmp = registers.v[register1];
 
         // Least significant digit
-        memory.set(registers.i.0 as usize + 2, tmp % Wrapping(10));
+        memory.set((registers.i + Wrapping(2)).0 as usize, tmp % Wrapping(10));
         tmp /= Wrapping(10);
 
         // Middle digit
-        memory.set(registers.i.0 as usize + 1, tmp % Wrapping(10));
+        memory.set((registers.i + Wrapping(1)).0 as usize, tmp % Wrapping(10));
         tmp /= Wrapping(10);
 
         // Most significant digit
         memory.set(registers.i.0 as usize, tmp % Wrapping(10));
 
+        registers.i += Wrapping(3);
         registers.inc_pc(2);
     }
 
@@ -1108,6 +1109,31 @@ mod instruction_tests {
         data[1] = (dst & 0xFF) as u8;
     }
 
+    fn assemble_get_delay(data: &mut [u8], reg: u8) {
+        data[0] = (0xF << 4) | reg;
+        data[1] = 07;
+    }
+
+    fn assemble_set_delay(data: &mut [u8], reg: u8) {
+        data[0] = (0xF << 4) | reg;
+        data[1] = 0x15;
+    }
+
+    fn assemble_set_sound(data: &mut [u8], reg: u8) {
+        data[0] = (0xF << 4) | reg;
+        data[1] = 0x18;
+    }
+
+    fn assemble_i_plus_vx(data: &mut [u8], reg: u8) {
+        data[0] = (0xF << 4) | reg;
+        data[1] = 0x1E;
+    }
+
+    fn assemble_bcd(data: &mut [u8], reg: u8) {
+        data[0] = (0xF << 4) | reg;
+        data[1] = 0x33;
+    }
+
     #[test]
     fn mv() {
         let mut program = [0; 256];
@@ -1437,10 +1463,76 @@ mod instruction_tests {
     }
 
     #[test]
+    fn get_delay() {
+        let mut program = [0; 256];
+        assemble_get_delay(&mut program, 0x3);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.delay.0 = 0x40;
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.v[0x3].0, 0x40);
+        assert_eq!(cpu.registers.pc.0, 0x2);
+    }
+
+    #[test]
+    fn set_delay() {
+        let mut program = [0; 256];
+        assemble_set_delay(&mut program, 0x3);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x3].0 = 0x69;
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.delay.0, 0x69);
+        assert_eq!(cpu.registers.pc.0, 0x2);
+    }
+
+    #[test]
+    fn set_sound() {
+        let mut program = [0; 256];
+        assemble_set_sound(&mut program, 0x3);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x3].0 = 0x69;
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.sound.0, 0x69);
+        assert_eq!(cpu.registers.pc.0, 0x2);
+    }
+
+    #[test]
+    fn i_plus_vx() {
+        let mut program = [0; 256];
+        assemble_i_plus_vx(&mut program, 0x3);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x3].0 = 0x69;
+        cpu.registers.i.0 = 0x40;
+        cpu.step(&mut memory);
+        assert_eq!(cpu.registers.i.0, 0x40 + 0x69);
+        assert_eq!(cpu.registers.pc.0, 0x2);
+    }
+
+    #[test]
+    fn bcd() {
+        let mut program = [0; 256];
+        assemble_bcd(&mut program, 0x3);
+        let mut memory = Memory::of_bytes(&program);
+        let mut cpu = prepare_cpu();
+        cpu.registers.v[0x3].0 = 146;
+        cpu.registers.i.0 = 0x40;
+        cpu.step(&mut memory);
+
+        assert_eq!(memory.get(0x40).0, 1);
+        assert_eq!(memory.get(0x41).0, 4);
+        assert_eq!(memory.get(0x42).0, 6);
+
+        assert_eq!(cpu.registers.i.0, 0x40 + 3);
+        assert_eq!(cpu.registers.pc.0, 0x2);
+    }
+
+    #[test]
     fn pc_plus_reg() {
         let mut program = [0; 256];
         assemble_pc_plus_r(&mut program, 0x8FE);
-
         let mut memory = Memory::of_bytes(&program);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0].0 = 0xFF;
