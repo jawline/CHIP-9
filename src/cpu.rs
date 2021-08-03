@@ -95,12 +95,15 @@ impl Instruction {
     /// execution.
     fn mcall_display_or_flow(
         registers: &mut Registers,
-        _memory: &mut Memory,
+        memory: &mut Memory,
         data: u16,
         _op_tables: &OpTables,
     ) {
         match data {
-            0xE0 => unimplemented!("clear display"),
+            0xE0 => {
+                memory.clear_display();
+                registers.inc_pc(2);
+            },
             0xEE => {
                 trace!("ret");
                 let new_pc = registers.stack_pop16();
@@ -120,7 +123,6 @@ impl Instruction {
 
     /// Goto changes the PC pointer to the fixed location
     fn goto(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
-        registers.stack_push16(data);
         registers.pc = Wrapping(data);
     }
 
@@ -366,12 +368,13 @@ impl Instruction {
         format!("draw v{} v{} {}", register1, register2, imm)
     }
 
-    fn key_op(_registers: &mut Registers, _memory: &mut Memory, _data: u16, _op_tables: &OpTables) {
-        unimplemented!();
+    fn key_op(registers: &mut Registers, _memory: &mut Memory, _data: u16, _op_tables: &OpTables) {
+        trace!("keyop");
+        registers.inc_pc(2);
     }
 
     fn key_op_to_string(_data: u16, _op_table: &OpTables) -> String {
-        unimplemented!();
+        format!("TODO: key op to string") 
     }
 
     fn load_or_store(
@@ -624,12 +627,13 @@ impl Instruction {
     }
 
     fn wait_for_key(
-        _registers: &mut Registers,
+        registers: &mut Registers,
         _memory: &mut Memory,
         _data: u16,
         _op_tables: &OpTables,
     ) {
-        unimplemented!("wait for key");
+        trace!("wait for key");
+        registers.inc_pc(2);
     }
 
     fn wait_for_key_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -1340,6 +1344,7 @@ mod instruction_tests {
         cpu.step(&mut memory);
         info!("{:?}", cpu.registers);
         assert!(cpu.registers.pc == Wrapping(0x00AF));
+        assert_eq!(cpu.registers.stack_idx, 0);
     }
 
     #[test]

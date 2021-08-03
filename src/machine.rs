@@ -28,8 +28,8 @@ impl Machine {
     pub fn step(&mut self) {
         self.cpu.step(&mut self.memory);
         self.clocks_since_delay += 1;
-        if (self.clocks_since_delay >= CLOCKS_PER_DELAY) {
-            
+        if self.clocks_since_delay >= CLOCKS_PER_DELAY {
+
             if self.cpu.registers.sound.0 > 0 {
                 self.cpu.registers.sound.0 -= 1;
             }
