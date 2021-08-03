@@ -106,7 +106,7 @@ impl Instruction {
                 let new_pc = registers.stack_pop16();
                 registers.pc = Wrapping(new_pc);
             }
-            _ => panic!("machine code routes are unsupported"),
+            _ => panic!("machine code routes are unsupported {:x}", data),
         }
     }
 
@@ -357,6 +357,7 @@ impl Instruction {
         let (register1, register2) = Self::two_registers_from_data(data);
         let d = data & 0x000F;
         registers.v[0xF] = Wrapping(memory.draw_sprite(registers.v[register1].0 as usize, registers.v[register2].0 as usize, d as usize, registers.i.0 as usize));
+        registers.inc_pc(2);
     }
 
     fn draw_sprite_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -648,13 +649,14 @@ impl Instruction {
     }
 
     fn set_i_sprite_addr(
-        _registers: &mut Registers,
+        registers: &mut Registers,
         _memory: &mut Memory,
         data: u16,
         _op_tables: &OpTables,
     ) {
-        let (_register1, _register2) = Self::two_registers_from_data(data);
-        unimplemented!("set i sprite addr");
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        registers.i.0 = 0x4000 + ((registers.v[register1].0 & 0x0F) as u16 * 5);
+        registers.inc_pc(2);
     }
 
     fn set_i_sprite_addr_to_string(data: u16, _op_table: &OpTables) -> String {
@@ -987,7 +989,14 @@ impl Cpu {
     pub fn step(&mut self, memory: &mut Memory) {
         let next_opcode = memory.get16(self.registers.pc.0 as usize).0;
         let op_id = ((next_opcode & 0xF000) >> 12) as usize;
-        trace!("ID: {:x} DATA: {:x}", op_id, next_opcode & 0x0FFF);
+
+        // TODO: Strip this
+        let instr_tostring = (self.op_tables.main_op_table[op_id].to_string)(
+            next_opcode & 0x0FFF,
+            &self.op_tables,
+        );
+
+        trace!("PC: {:x} ID: {:x} DATA: {:x} {}", self.registers.pc, op_id, next_opcode & 0x0FFF, instr_tostring);
         (self.op_tables.main_op_table[op_id].execute)(
             &mut self.registers,
             memory,

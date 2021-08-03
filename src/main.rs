@@ -15,6 +15,7 @@ fn from_file(path: &str) -> io::Result<Vec<u8>> {
 }
 
 fn main() -> io::Result<()> {
+    env_logger::init();
     let mut args = args().skip(1);
     let filepath = args.next().unwrap();
     let data = from_file(&filepath)?;
