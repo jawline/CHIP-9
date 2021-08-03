@@ -19,4 +19,8 @@ impl Machine {
             memory: Memory::new(),
         }
     }
+
+    pub fn step(&mut self) {
+        self.cpu.step(&mut self.memory);
+    }
 }

@@ -18,6 +18,9 @@ fn main() -> io::Result<()> {
     let mut args = args().skip(1);
     let filepath = args.next().unwrap();
     let data = from_file(&filepath)?;
-    let machine = Machine::of_bytes(data);
-    Ok(())
+    let mut machine = Machine::of_bytes(data);
+
+    loop {
+        machine.step();
+    }
 }

@@ -337,7 +337,6 @@ impl Instruction {
         data: u16,
         _op_tables: &OpTables,
     ) {
-        println!("TODO: Rand");
         let (register, mask) = Self::register_and_immediate_from_data(data);
         let rval: u8 = registers.rng.gen::<u8>();
         registers.v[register].0 = rval & mask;
@@ -350,12 +349,14 @@ impl Instruction {
     }
 
     fn draw_sprite(
-        _registers: &mut Registers,
-        _memory: &mut Memory,
-        _data: u16,
+        registers: &mut Registers,
+        memory: &mut Memory,
+        data: u16,
         _op_tables: &OpTables,
     ) {
-        unimplemented!();
+        let (register1, register2) = Self::two_registers_from_data(data);
+        let d = data & 0x000F;
+        registers.v[0xF] = Wrapping(memory.draw_sprite(registers.v[register1].0 as usize, registers.v[register2].0 as usize, d as usize, registers.i.0 as usize));
     }
 
     fn draw_sprite_to_string(data: u16, _op_table: &OpTables) -> String {
