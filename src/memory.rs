@@ -15,6 +15,7 @@ pub struct Memory {
 
 impl Memory {
 
+    /// Create a new completely clear memory
     pub fn new() -> Self {
         Self {
             data: [Wrapping(0); MEMORY_SIZE],
@@ -22,14 +23,16 @@ impl Memory {
         }
     }
 
-    pub fn of_bytes(data: &[u8]) -> Self {
+    pub fn of_bytes(data: &[u8], offset: usize) -> Self {
         let mut new_memory = Self::new();
         for i in 0..min(data.len(), MEMORY_SIZE) {
-            new_memory.data[0x200 + i] = Wrapping(data[i]);
+            new_memory.data[offset + i] = Wrapping(data[i]);
         }
         new_memory
     }
 
+    /// Get a u8 from memory. If the address is > 0x4000 then it references the SPRITE_MEM
+    /// containing text
     pub fn get(&self, idx: usize) -> Wrapping<u8> {
         if idx < 0x4000 {
             self.data[idx]
@@ -38,19 +41,20 @@ impl Memory {
         }
     }
 
+    /// Set a u8 in memory
     pub fn set(&mut self, idx: usize, val: Wrapping<u8>) {
         self.data[idx] = val;
     }
 
+    /// Return a u16 in system order from memory, performing necessary endianness conversion
     pub fn get16(&self, idx: usize) -> Wrapping<u16> {
         let first_part = self.get(idx).0;
         let second_part = self.get(idx + 1).0;
-        let fval: Wrapping<u16> = Wrapping(u16::from_be(
-            first_part as u16 | ((second_part as u16) << 8),
-        ));
-        fval
+        let combined = first_part as u16 | (second_part as u16) << 8;
+        Wrapping(u16::from_be(combined))
     }
 
+    /// Clear the entire framebuffer
     pub fn clear_display(&mut self) {
         for i in 0..SCREEN_SIZE {
             self.frame_buffer[i] = 0;

@@ -1011,7 +1011,7 @@ impl Cpu {
     pub fn new() -> Self {
         Self {
             registers: Registers {
-                pc: Wrapping(0),
+                pc: Wrapping(0x200),
                 v: [Wrapping(0); 16],
                 i: Wrapping(0),
                 stack: [Wrapping(0); 256],
@@ -1063,7 +1063,8 @@ mod instruction_tests {
     }
 
     fn prepare_cpu() -> Cpu {
-        let cpu = Cpu::new();
+        let mut cpu = Cpu::new();
+        cpu.registers.pc.0 = 0x0;
         cpu
     }
 
@@ -1192,7 +1193,7 @@ mod instruction_tests {
     fn mv() {
         let mut program = [0; 256];
         assemble_reg_mv(&mut program, 0x2, 0x4);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x4].0 = 40;
         cpu.step(&mut memory);
@@ -1206,7 +1207,7 @@ mod instruction_tests {
     fn or() {
         let mut program = [0; 256];
         assemble_reg_or(&mut program, 0x2, 0x4);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.registers.v[0x4].0 = 40;
@@ -1221,7 +1222,7 @@ mod instruction_tests {
     fn and() {
         let mut program = [0; 256];
         assemble_reg_and(&mut program, 0x2, 0x4);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.registers.v[0x4].0 = 40;
@@ -1236,7 +1237,7 @@ mod instruction_tests {
     fn xor() {
         let mut program = [0; 256];
         assemble_reg_xor(&mut program, 0x2, 0x4);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.registers.v[0x4].0 = 40;
@@ -1251,7 +1252,7 @@ mod instruction_tests {
     fn shr() {
         let mut program = [0; 256];
         assemble_reg_shr(&mut program, 0x2, 0x0);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.step(&mut memory);
@@ -1264,7 +1265,7 @@ mod instruction_tests {
     fn shl() {
         let mut program = [0; 256];
         assemble_reg_shl(&mut program, 0x2, 0x0);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.step(&mut memory);
@@ -1277,7 +1278,7 @@ mod instruction_tests {
     fn add_reg() {
         let mut program = [0; 256];
         assemble_reg_add(&mut program, 0x2, 0x4);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.registers.v[0x4].0 = 40;
@@ -1294,7 +1295,7 @@ mod instruction_tests {
     fn add_reg_carry() {
         let mut program = [0; 256];
         assemble_reg_add(&mut program, 0x2, 0x4);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 128;
         cpu.registers.v[0x4].0 = 128;
@@ -1311,7 +1312,7 @@ mod instruction_tests {
     fn sub_reg() {
         let mut program = [0; 256];
         assemble_reg_sub(&mut program, 0x2, 0x4);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.registers.v[0x4].0 = 40;
@@ -1328,7 +1329,7 @@ mod instruction_tests {
     fn sub_reg_carry() {
         let mut program = [0; 256];
         assemble_reg_sub(&mut program, 0x2, 0x4);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 64;
         cpu.registers.v[0x4].0 = 128;
@@ -1345,7 +1346,7 @@ mod instruction_tests {
     fn rsub_reg() {
         let mut program = [0; 256];
         assemble_reg_rsub(&mut program, 0x2, 0x4);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 40;
         cpu.registers.v[0x4].0 = 64;
@@ -1362,7 +1363,7 @@ mod instruction_tests {
     fn rsub_reg_carry() {
         let mut program = [0; 256];
         assemble_reg_rsub(&mut program, 0x2, 0x4);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x2].0 = 128;
         cpu.registers.v[0x4].0 = 64;
@@ -1379,7 +1380,7 @@ mod instruction_tests {
     fn goto() {
         let mut program = [0; 256];
         assemble_goto(&mut program, 0xAF);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.step(&mut memory);
         info!("{:?}", cpu.registers);
@@ -1391,7 +1392,7 @@ mod instruction_tests {
     fn call() {
         let mut program = [0; 256];
         assemble_call(&mut program, 0xADE);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         // Mark the stack location we expect to get overwritten to be non-zero
         cpu.registers.stack[0] = Wrapping(0xAA);
@@ -1409,7 +1410,7 @@ mod instruction_tests {
         let mut program = [0; 256];
         assemble_reg_eq_imm(&mut program, 5, 0xFE);
 
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
 
         cpu.registers.v[5] = Wrapping(0xFE);
@@ -1429,7 +1430,7 @@ mod instruction_tests {
         let mut program = [0; 256];
         assemble_reg_neq_imm(&mut program, 5, 0xFE);
 
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
 
         cpu.registers.v[5] = Wrapping(0xFE);
@@ -1448,7 +1449,7 @@ mod instruction_tests {
     fn two_reg_eq() {
         let mut program = [0; 256];
         assemble_two_reg_eq(&mut program, 0x7, 0xF);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x7] = Wrapping(0xFE);
         cpu.registers.v[0xF] = Wrapping(0xAA);
@@ -1464,7 +1465,7 @@ mod instruction_tests {
     fn two_reg_neq() {
         let mut program = [0; 256];
         assemble_two_reg_neq(&mut program, 0x7, 0xF);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x7] = Wrapping(0xFE);
         cpu.registers.v[0xF] = Wrapping(0xAA);
@@ -1481,7 +1482,7 @@ mod instruction_tests {
         let mut program = [0; 256];
         assemble_load_imm(&mut program, 7, 0xFE);
 
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.step(&mut memory);
         assert_eq!(cpu.registers.v[7].0, 0xFE);
@@ -1494,7 +1495,7 @@ mod instruction_tests {
         assemble_add_imm(&mut program, 3, 2);
         assemble_add_imm(&mut program[2..], 3, 8);
 
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.step(&mut memory);
         assert_eq!(cpu.registers.v[3].0, 0x2);
@@ -1510,7 +1511,7 @@ mod instruction_tests {
         let mut program = [0; 256];
         assemble_set_i(&mut program, 0x8FE);
 
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.step(&mut memory);
         assert_eq!(cpu.registers.i.0, 0x8FE);
@@ -1521,7 +1522,7 @@ mod instruction_tests {
     fn get_delay() {
         let mut program = [0; 256];
         assemble_get_delay(&mut program, 0x3);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.delay.0 = 0x40;
         cpu.step(&mut memory);
@@ -1533,7 +1534,7 @@ mod instruction_tests {
     fn set_delay() {
         let mut program = [0; 256];
         assemble_set_delay(&mut program, 0x3);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x3].0 = 0x69;
         cpu.step(&mut memory);
@@ -1545,7 +1546,7 @@ mod instruction_tests {
     fn set_sound() {
         let mut program = [0; 256];
         assemble_set_sound(&mut program, 0x3);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x3].0 = 0x69;
         cpu.step(&mut memory);
@@ -1557,7 +1558,7 @@ mod instruction_tests {
     fn i_plus_vx() {
         let mut program = [0; 256];
         assemble_i_plus_vx(&mut program, 0x3);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x3].0 = 0x69;
         cpu.registers.i.0 = 0x40;
@@ -1570,7 +1571,7 @@ mod instruction_tests {
     fn bcd() {
         let mut program = [0; 256];
         assemble_bcd(&mut program, 0x3);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0x3].0 = 146;
         cpu.registers.i.0 = 0x40;
@@ -1588,7 +1589,7 @@ mod instruction_tests {
     fn pc_plus_reg() {
         let mut program = [0; 256];
         assemble_pc_plus_r(&mut program, 0x8FE);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         cpu.registers.v[0].0 = 0xFF;
         cpu.step(&mut memory);
@@ -1600,7 +1601,7 @@ mod instruction_tests {
         let mut program = [0; 256];
         assemble_call(&mut program, 0x10);
         assemble_ret(&mut program[0x10..]);
-        let mut memory = Memory::of_bytes(&program);
+        let mut memory = Memory::of_bytes(&program, 0x0);
         let mut cpu = prepare_cpu();
         // Mark the stack location we expect to get overwritten to be non-zero
         cpu.registers.stack[0] = Wrapping(0xAA);
