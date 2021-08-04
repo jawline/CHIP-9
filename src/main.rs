@@ -49,12 +49,6 @@ fn main() -> io::Result<()> {
             break;
         }
 
-        machine.set_key(2, engine.is_key_pressed(KeyCode::Char('w')));
-        machine.set_key(8, engine.is_key_pressed(KeyCode::Char('s')));
-
-        machine.set_key(4, engine.is_key_pressed(KeyCode::Char('a')));
-        machine.set_key(6, engine.is_key_pressed(KeyCode::Char('d')));
-
         for i in 0..9 {
             let key_char = ('0' as u8 + i) as char;
             if engine.is_key_pressed(KeyCode::Char(key_char)) {
@@ -63,6 +57,12 @@ fn main() -> io::Result<()> {
                 machine.set_key(i, false);
             }
         }
+
+        machine.set_key(2, engine.is_key_pressed(KeyCode::Char('w')));
+        machine.set_key(8, engine.is_key_pressed(KeyCode::Char('s')));
+
+        machine.set_key(4, engine.is_key_pressed(KeyCode::Char('a')));
+        machine.set_key(6, engine.is_key_pressed(KeyCode::Char('d')));
 
         for _ in 0..10 {
             machine.step();
