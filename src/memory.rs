@@ -61,11 +61,12 @@ impl Memory {
 
         let mut vf_reg = 0;
 
-        for yoff in 0..(n + 1) {
+        for yoff in 0..n {
 
             let y = (y + yoff) % SCREEN_HEIGHT;
+            let sprite = self.get(i + yoff).0;
+
             for xoff in 0..8 {
-                let sprite = self.get(i + xoff).0;
                 let x = (x + xoff) % SCREEN_WIDTH;
 
                 let fb = &mut self.frame_buffer;
@@ -74,7 +75,7 @@ impl Memory {
                 let xor_value = if sprite & (1 << (7 - xoff)) != 0 { 1 } else { 0 };
                 let current_value = fb[fb_idx];
                 let new_value = current_value ^ xor_value;
-                trace!("{} {} {} {}", x, y, new_value, sprite);
+                trace!("{} {} {} {} {}", x, y, new_value, sprite, i + yoff);
 
                 if current_value == 1 && new_value == 0 {
                     vf_reg = 1;

@@ -25,8 +25,26 @@ impl Machine {
         }
     }
 
+    pub fn set_key(&mut self, key: u8, state: bool) {
+        let current = self.cpu.registers.keys[key as usize];
+        if state && !current {
+            if let Some(register) = self.cpu.registers.wait_for_key {
+                self.cpu.registers.v[register].0 = key;
+                self.cpu.registers.wait_for_key = None;
+            }
+        }
+
+        self.cpu.registers.keys[key as usize] = state;
+    }
+
     pub fn step(&mut self) {
-        self.cpu.step(&mut self.memory);
+
+        // Only step the CPU if we are not waiting for a key press
+        if let None = self.cpu.registers.wait_for_key {
+            self.cpu.step(&mut self.memory);
+        }
+
+        // Increment the timers at roughly 1 clock per 10 steps
         self.clocks_since_delay += 1;
         if self.clocks_since_delay >= CLOCKS_PER_DELAY {
 

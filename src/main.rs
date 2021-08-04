@@ -19,7 +19,6 @@ fn from_file(path: &str) -> io::Result<Vec<u8>> {
 }
 
 fn draw_frame(memory: &Memory, engine: &mut console_engine::ConsoleEngine) {
-    engine.wait_frame();
     engine.clear_screen();
 
     for y in 0..32 {
@@ -44,11 +43,32 @@ fn main() -> io::Result<()> {
     let mut engine = console_engine::ConsoleEngine::init(64, 32, 60).unwrap();
 
     loop {
-        machine.step();
-        draw_frame(&machine.memory, &mut engine);
+        engine.wait_frame();
+
+        machine.set_key(2, engine.is_key_pressed(KeyCode::Char('w')));
+        machine.set_key(8, engine.is_key_pressed(KeyCode::Char('s')));
+
+        machine.set_key(4, engine.is_key_pressed(KeyCode::Char('a')));
+        machine.set_key(6, engine.is_key_pressed(KeyCode::Char('d')));
+
 
         if engine.is_key_pressed(KeyCode::Char('q')) {
             break;
+        }
+
+        for _ in 0..10 {
+            machine.step();
+        }
+
+        draw_frame(&machine.memory, &mut engine);
+
+        for i in 0..9 {
+            let key_char = ('0' as u8 + i) as char;
+            if engine.is_key_pressed(KeyCode::Char(key_char)) {
+                machine.set_key(i, true);
+            } else {
+                machine.set_key(i, false);
+            }
         }
     }
 

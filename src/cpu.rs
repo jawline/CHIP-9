@@ -20,6 +20,9 @@ pub const DATA_MASK: u16 = 0x00FF;
 /// we extract it with this mask
 pub const NIBBLE_DATA_MASK: u16 = 0x000F;
 
+/// The number of key registers
+pub const NUM_KEYS: usize = 16;
+
 #[derive(Debug)]
 pub struct Registers {
     /// The CHIP architecture has 16 8-bit general purpose registers.
@@ -44,6 +47,13 @@ pub struct Registers {
 
     /// Used to generate random values for the masked random command
     pub rng: ThreadRng,
+
+    /// True if a given key is currently pressed
+    pub keys: [bool; NUM_KEYS],
+
+    /// If we are waiting for a key then this is Some of the register to write the key to
+    /// otherwise None
+    pub wait_for_key: Option<usize>,
 }
 
 pub struct OpTables {
@@ -368,13 +378,40 @@ impl Instruction {
         format!("draw v{} v{} {}", register1, register2, imm)
     }
 
-    fn key_op(registers: &mut Registers, _memory: &mut Memory, _data: u16, _op_tables: &OpTables) {
-        trace!("keyop");
-        registers.inc_pc(2);
+    fn key_op(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        let rval = registers.v[register1];
+        let pressed = registers.keys[rval.0 as usize];
+        let code = data & 0x00FF;
+
+        match code {
+            0x9E => {
+                if pressed {
+                    registers.inc_pc(4);
+                } else {
+                    registers.inc_pc(2);
+                }
+            },
+            0xA1 => {
+                if pressed {
+                    registers.inc_pc(2);
+                } else {
+                    registers.inc_pc(4);
+                }
+            },
+            _ => panic!("unexpected keyop {}", code)
+        };
     }
 
-    fn key_op_to_string(_data: u16, _op_table: &OpTables) -> String {
-        format!("TODO: key op to string") 
+    fn key_op_to_string(data: u16, _op_table: &OpTables) -> String {
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        let code = data & 0x00FF;
+
+        match code {
+            0x9E => format!("eq Key(V{}), 1", register1),
+            0xA1 => format!("neq Key(V{}), 1", register1),
+            _ => panic!("invalid op: {}", code)
+        }
     }
 
     fn load_or_store(
@@ -629,10 +666,11 @@ impl Instruction {
     fn wait_for_key(
         registers: &mut Registers,
         _memory: &mut Memory,
-        _data: u16,
+        data: u16,
         _op_tables: &OpTables,
     ) {
-        trace!("wait for key");
+        let (register1, _register2) = Self::two_registers_from_data(data);
+        registers.wait_for_key = Some(register1);
         registers.inc_pc(2);
     }
 
@@ -981,6 +1019,8 @@ impl Cpu {
                 delay: Wrapping(0),
                 sound: Wrapping(0),
                 rng: rand::thread_rng(),
+                keys: [false; NUM_KEYS],
+                wait_for_key: None,
             },
             op_tables: OpTables {
                 main_op_table: Instruction::main_op_table(),
