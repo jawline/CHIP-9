@@ -2,12 +2,17 @@ use log::trace;
 use std::cmp::min;
 use std::num::Wrapping;
 
+/// The CHIP-8 VM has 4kb of user accessible memory
 pub const MEMORY_SIZE: usize = 1024 * 8;
-pub const SCREEN_SIZE: usize = 64 * 32;
+
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
+pub const SCREEN_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
+
+/// The CHIP-8 VM has sprites for the characters 0-F hardcoded. These bytes encode that.
 pub const SPRITE_MEM: [u8; 5 * 16] = [0xF0_u8, 0x90, 0x90, 0x90, 0xF0, 0x20, 0x60, 0x20, 0x20, 0x70, 0xF0, 0x10, 0xF0, 0x80, 0xF0, 0xF0, 0x10, 0xF0, 0x10, 0xF0, 0x90, 0x90, 0xF0, 0x10, 0x10, 0xF0, 0x80, 0xF0, 0x10, 0xF0, 0xF0, 0x80, 0xF0, 0x90, 0xF0, 0xF0, 0x10, 0x20, 0x40, 0x40, 0xF0, 0x90, 0xF0, 0x90, 0xF0, 0xF0, 0x90, 0xF0, 0x10, 0xF0, 0xF0, 0x90, 0xF0, 0x90, 0x90, 0xE0, 0x90, 0xE0, 0x90, 0xE0, 0xF0, 0x80, 0x80, 0x80, 0xF0, 0xE0, 0x90, 0x90, 0x90, 0xE0, 0xF0, 0x80, 0xF0, 0x80, 0xF0, 0xF0, 0x80, 0xF0, 0x80, 0x80];
 
+/// The memory structure contains the user accessible data and the current frame buffer.
 pub struct Memory {
     data: [Wrapping<u8>; MEMORY_SIZE],
     pub frame_buffer: [u8; SCREEN_SIZE],
@@ -23,6 +28,8 @@ impl Memory {
         }
     }
 
+    /// Create a new 4kb memory region with the supplied data set at the given offset. Used to load
+    /// programs at 0x200 (the default starting location)
     pub fn of_bytes(data: &[u8], offset: usize) -> Self {
         let mut new_memory = Self::new();
         for i in 0..min(data.len(), MEMORY_SIZE) {
@@ -90,5 +97,25 @@ impl Memory {
         }
 
         vf_reg
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_and_get() {
+        let mut mem = Memory::new();
+        mem.set(0x5, Wrapping(0x9E));
+        assert_eq!(mem.get(0x5), Wrapping(0x9E));
+    }
+
+    #[test]
+    fn get16() {
+        let mut mem = Memory::new();
+        mem.set(0x5, Wrapping(0x9E));
+        mem.set(0x6, Wrapping(0xFE));
+        assert_eq!(mem.get16(0x5), Wrapping(0x9EFE));
     }
 }

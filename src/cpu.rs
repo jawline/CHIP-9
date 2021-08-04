@@ -284,21 +284,25 @@ impl Instruction {
         format!("add v{} {}", register, data)
     }
 
+    /// The math or bitops instruction picks a opcode from the math_opcode table
+    /// using the final nibble as it's value
     fn math_or_bitop(
         registers: &mut Registers,
         memory: &mut Memory,
         data: u16,
         op_tables: &OpTables,
     ) {
-        let math_opcode = data & 0x000F;
+        let math_opcode = data & NIBBLE_DATA_MASK;
         (op_tables.math_op_table[math_opcode as usize].execute)(registers, memory, data, op_tables);
     }
 
     fn math_or_bitop_to_string(data: u16, op_table: &OpTables) -> String {
-        let math_opcode = data & 0x000F;
+        let math_opcode = data & NIBBLE_DATA_MASK;
         (op_table.math_op_table[math_opcode as usize].to_string)(data, op_table)
     }
 
+    /// Test if two registers are not equal. If they are not equal then skip the next instruction,
+    /// otherwise run it.
     fn two_registers_not_equal(
         registers: &mut Registers,
         _memory: &mut Memory,
@@ -318,8 +322,8 @@ impl Instruction {
         format!("neq v{} v{}", register1, register2)
     }
 
+    /// Set the I register to an immediate value
     fn set_i(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
-        trace!("seti {:x}", data);
         registers.i = Wrapping(data);
         registers.inc_pc(2);
     }
@@ -328,6 +332,7 @@ impl Instruction {
         format!("ld i {:x}", data)
     }
 
+    /// Jump to an immediate value plus the value of V[0]
     fn jump_immediate_plus_register(
         registers: &mut Registers,
         _memory: &mut Memory,
@@ -360,6 +365,10 @@ impl Instruction {
         format!("rand v{} {}", register, mask)
     }
 
+    /// Draw a sprite from memory to the framebuffer (which is stored in the Memory structure).
+    /// 0x0F00 is the X position, 0x00F0 is the Y position and 0x000F is the depth of the sprite.
+    /// The sprite is drawn downward using the data at i, incrementing y by 1 for every pixel down
+    /// it goes.
     fn draw_sprite(
         registers: &mut Registers,
         memory: &mut Memory,
@@ -367,7 +376,7 @@ impl Instruction {
         _op_tables: &OpTables,
     ) {
         let (register1, register2) = Self::two_registers_from_data(data);
-        let d = data & 0x000F;
+        let d = data & NIBBLE_DATA_MASK;
         registers.v[0xF] = Wrapping(memory.draw_sprite(registers.v[register1].0 as usize, registers.v[register2].0 as usize, d as usize, registers.i.0 as usize));
         registers.inc_pc(2);
     }
@@ -378,7 +387,12 @@ impl Instruction {
         format!("draw v{} v{} {}", register1, register2, imm)
     }
 
+    /// If the final byte = 0x9E then skip the next instruction if key[register[data & 0x0F00]] is
+    /// pressed.
+    /// If the final byte = 0xA1 then skip the next instruction if key[register[data & 0x0F00]] is
+    /// not pressed
     fn key_op(registers: &mut Registers, _memory: &mut Memory, data: u16, _op_tables: &OpTables) {
+
         let (register1, _register2) = Self::two_registers_from_data(data);
         let rval = registers.v[register1];
         let pressed = registers.keys[rval.0 as usize];
@@ -1002,12 +1016,16 @@ impl Instruction {
     }
 }
 
+/// The CPU holds the current program registers and the instruction op tables
 pub struct Cpu {
     pub registers: Registers,
     pub op_tables: OpTables,
 }
 
 impl Cpu {
+
+    /// Create a fresh CPU instance with 0 / false set for all registers and PC set to 0x200 (the
+    /// typical ROM start location)
     pub fn new() -> Self {
         Self {
             registers: Registers {
