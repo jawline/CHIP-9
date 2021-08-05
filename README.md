@@ -19,4 +19,14 @@ To model this we maintain several different opcode tables. One for the base tabl
 
 The instructions are all stored big-endian and are generally straightforward in implementation. The exception to this is the mcall instruction which is meant to execute code in the host machines assembly. To avoid nesting machine specific emulators we do not treat this case, though it is generally unused in ROM's so it doesn't cause too many issues.
 
+#### Memory
 
+A CHIP-8 machine has 4kb of user addressable R/W RAM which is used for program code and data. It also has a small region of read only memory for storing sprites of the characters 0 through F. Memory is addressed through the 16-bit register I which is positioned using dedicated opcodes. There is also a 64x32 1-bit frame buffer which can only be interacted with through the clear display and draw sprite instructions.
+
+#### Display
+
+CHIP-8 systems use a 64 by 32 black and white display. The display is one bit, and is unable to show shades of gray. Internally this is represented through a boolean frame buffer with space for 64x32 boolean values. There is no vertical synchronization or double buffering logic in CHIP-8, instead the screen can be redrawn after every frame buffer operation. This can lead to visual artifacting but generally games design around this.
+
+#### Sound
+
+CHIP-8 can only play a sound through it's sound register. A sound while play whenever the value in the register is not zero. While the register is not zero it will tick down at a frequency of 60hz.
