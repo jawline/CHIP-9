@@ -2,10 +2,10 @@
 
 This project implements as CHIP-8 emulator / interpreter in Rust and use the CLI and the input and output device, allowing you to play CHIP-8 games entirely in the terminal. The emulator is written in Rust with a custom emulation core and uses the console_engine library for IO.
 
-![Screenshott](/screenshots/screen1.jpg?raw=true "Screenshot 1")
-![Screenshott](/screenshots/screen2.jpg?raw=true "Screenshot 2")
-![Screenshott](/screenshots/screen3.jpg?raw=true "Screenshot 3")
-![Screenshott](/screenshots/screen4.jpg?raw=true "Screenshot 4")
+![Screenshot](/screenshots/screen1.jpg?raw=true "Screenshot 1")
+![Screenshot](/screenshots/screen2.jpg?raw=true "Screenshot 2")
+![Screenshot](/screenshots/screen3.jpg?raw=true "Screenshot 3")
+![Screenshot](/screenshots/screen4.jpg?raw=true "Screenshot 4")
 
 #### General Structure
 
